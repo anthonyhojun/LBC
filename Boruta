@@ -18,31 +18,31 @@ library(Hmisc)
 
 # # # Load
 # # # Create directory
-sysdate <- format(Sys.Date(), "%Y%m%d")
-querydirectory <- file.path("C:/Users/antpc/Desktop/Vegas/Analytics/Query", sysdate)
-
-# Load files
-rf <- list.files(querydirectory, full.names = TRUE)
-rf.bind <- data.table(rbindlist(lapply(rf, read_csv)))
+# sysdate <- format(Sys.Date(), "%Y%m%d")
+# querydirectory <- file.path("C:/Users/antpc/Desktop/Vegas/Analytics/Query", sysdate)
+# 
+# # Load files
+# rf <- list.files(querydirectory, full.names = TRUE)
+# rf.bind <- data.table(rbindlist(lapply(rf, read_csv)))
 
 ### Start
 
 ### 1 day retention
 # Default Filters
-rf.base <- rf.bind[COUNTRY != "KR" & APP == "VEGAS" & TYPE == "GOLD"][order(UID, CREATE_DATE)]
-rf.base[, c("MAX_LEVEL", "LOGIN_DATE", "EMAIL", "COUNTRY", "AGE_RANGE", "FRIENDS_COUNT", "TYPE", "APP") := NULL]
-
-# Create date and provider filters
-rf.filtered <- rf.base[CREATE_ACCOUNT >= "2016-10-26" & UID > 6200] ##### Filter for marketing dates #####
-
-rf.filtered[, CREATE_ACCOUNT := substr(CREATE_ACCOUNT, 1, 10)]
-rf.filtered[, CREATE_DATE := substr(CREATE_DATE, 1, 10)]
-
-rf.filtered[, DIFF := as.integer(difftime(CREATE_DATE, CREATE_ACCOUNT, units = "days"))]
+# rf.base <- rf.bind[COUNTRY != "KR" & APP == "VEGAS" & TYPE == "GOLD"][order(UID, CREATE_DATE)]
+# rf.base[, c("MAX_LEVEL", "LOGIN_DATE", "EMAIL", "COUNTRY", "AGE_RANGE", "FRIENDS_COUNT", "TYPE", "APP") := NULL]
+# 
+# # Create date and provider filters
+# rf.clean <- rf.base[CREATE_ACCOUNT >= "2016-10-26" & UID > 6200] ##### Filter for marketing dates #####
+# 
+# rf.clean[, CREATE_ACCOUNT := substr(CREATE_ACCOUNT, 1, 10)]
+# rf.clean[, CREATE_DATE := substr(CREATE_DATE, 1, 10)]
+# 
+# rf.clean[, DIFF := as.integer(difftime(CREATE_DATE, CREATE_ACCOUNT, units = "days"))]
 
 # Pick retention day FOR FINDING DAY 3 RETENTION SET TO <= 2
-rf.filtered.retention <- rf.filtered
-rf.filtered <- rf.filtered[DIFF == 0] # [DIFF == 0] SHOULD BE -1 day of what i want to check
+rf.filtered.retention <- rf.clean
+rf.filtered <- rf.clean[DIFF == 0] # [DIFF == 0] SHOULD BE -1 day of what i want to check
 
 # Facebook info
 rf.facebook.info <- rf.filtered[, .(UID, GENDER, PROVIDER)]
@@ -102,7 +102,7 @@ rf.slotmostplayed <- rf.slotmostplayed[, .SD[1], by = UID][,.(UID, ID)]
 setnames(rf.slotmostplayed, "ID", "MOSTPLAYEDSLOT")
 
 # Level first day 
-rf.level <- rf.filtered[CONTENT == "LEVELUP", .SD[.N], by = .(UID, CREATE_DATE)][, .(UID, ID)]
+rf.level <- rf.filtered[CONTENT == "LEVELUP", .SD[.N], by = UID][, .(UID, ID)]
 setnames(rf.level, "ID", "LEVEL")
 rf.level$LEVEL <- as.integer(rf.level$LEVEL)
 
@@ -114,7 +114,7 @@ rf.level[, LEVEL.RANGES := as.character(cut(LEVEL, breaks = cuts.levels, labels 
 
 
 # End of gold first day 
-rf.gold <- rf.filtered[, .SD[.N], by = .(UID, CREATE_DATE)][, .(UID, CNT_CURRENT)]
+rf.gold <- rf.filtered[, .SD[.N], by = .(UID)][, .(UID, CNT_CURRENT)]
 
 cuts.gold = c(0, 50000, 100000, 250000, 500000, 1000000, 10000000, 100000000)
 labels.gold = c("0-49,999", "50,000-99,999", "100,000-249,999", "250,000-499,999", "500,000-999,999", 
@@ -144,7 +144,7 @@ rf.facebook.share[, SHARE := 1]
 setnames(rf.facebook.share, "V1", "UID")
 
 # SPREAD DATE
-rf.filtered.retention1 <- rf.filtered.retention[,.(UID, CREATE_ACCOUNT, CREATE_DATE, DIFF)]
+rf.filtered.retention1 <- rf.filtered.retention[, .SD[1], by = .(UID, CREATE_DATE)][,.(UID, CREATE_ACCOUNT, CREATE_DATE, DIFF)]
 rf.filtered.retention1 <- dcast(rf.filtered.retention1, UID ~ DIFF, function(x) 1, fill = 0)
 
 ###### MERGE
@@ -157,6 +157,8 @@ allmerged <- Reduce(function(x, y) merge(x, y, by = "UID", all.x = TRUE), list(r
 allmerged[is.na(allmerged)] <- 0
 
 
+### RANDOM FOREST
+allmerged.factors <- allmerged[, lapply(.SD, as.factor)]
 
 ### Make cuts into ordered factors
 allmerged.factors$SPIN.RANGES <- factor(allmerged$SPIN.RANGES, levels = labels.spins)
@@ -164,9 +166,6 @@ allmerged.factors$GOLD.RANGES <- factor(allmerged$GOLD.RANGES, levels = labels.g
 allmerged.factors$LEVEL.RANGES <- factor(allmerged$LEVEL.RANGES, levels = labels.levels2)
 allmerged.factors$WINAMOUNT.RANGES <- factor(allmerged$WINAMOUNT.RANGES, levels = labels.winamount2)
 allmerged.factors$WINCOUNT.RANGES <- factor(allmerged$WINCOUNT.RANGES, levels = labels.wincount2)
-
-### RANDOM FOREST
-allmerged.factors <- allmerged[, lapply(.SD, as.factor)]
 
 ## Check for NAs
 # lapply(allmerged.factors, function(x) sum(is.na(x)))
@@ -179,7 +178,7 @@ B2 <- Boruta(`1` ~ SPIN.RANGES + SLOTS_ENTERED +
 
 B2
 getSelectedAttributes(B2)
-plot(B2, cex.axis = .76, las = 2)
+plot(B2, cex.axis = .70, las = 2)
 
 
 
