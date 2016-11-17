@@ -63,9 +63,10 @@ setnames(rf.wincount, "N", "WIN_COUNT")
 
 cuts.wincount = c(0, 100, 250, 500, 1000, 2500, 5000, 10000, 50000)
 labels.wincount = c("0-99", "100-249", "250-499", "500-999", "1,000-2,499", "2,500-4,999", "5,000-9,999", "10,000-50,000")
+labels.wincount2 = c("0", "0-99", "100-249", "250-499", "500-999", "1,000-2,499", "2,500-4,999", "5,000-9,999", "10,000-50,000")
+
 
 rf.wincount[, WINCOUNT.RANGES := as.character(cut(WIN_COUNT, breaks = cuts.wincount, labels = labels.wincount, right = FALSE))]
-
 
 # Win amount
 rf.winamount <- rf.filtered[SUBCONTENT == "WIN"]
@@ -76,7 +77,7 @@ setnames(rf.winamount, "V1", "WIN_SUM")
 cuts.winamount = c(0, 50000, 100000, 250000, 500000, 1000000, 10000000, 100000000)
 labels.winamount = c("0-49,999", "50,000-99,999", "100,000-249,999", "250,000-499,999", "500,000-999,999", 
                 "1,000,000-9,999,999", "10,000,000-100,000,000")
-labels.winamount2 = c("0", "1-49,999", "50,000-99,999", "100,000-249,999", "250,000-499,999", "500,000-999,999", 
+labels.winamount2 = c("0", "0-49,999", "50,000-99,999", "100,000-249,999", "250,000-499,999", "500,000-999,999", 
                  "1,000,000-9,999,999", "10,000,000-100,000,000")
 rf.winamount[, WINAMOUNT.RANGES := as.character(cut(WIN_SUM, breaks = cuts.winamount, labels = labels.winamount, right = FALSE))]
 
@@ -107,7 +108,7 @@ rf.level$LEVEL <- as.integer(rf.level$LEVEL)
 
 cuts.levels = c(0, 5, 10, 15, 20, 50, 100)
 labels.levels = c("0-4", "5-9", "10-14", "15-19", "20-49", "50-100")
-labels.levels2 = c("2", "2-4", "5-9", "10-14", "15-19", "20-49", "50-100")
+labels.levels2 = c("0", "0-4", "5-9", "10-14", "15-19", "20-49", "50-100")
 
 rf.level[, LEVEL.RANGES := as.character(cut(LEVEL, breaks = cuts.levels, labels = labels.levels, right = FALSE, dig.lab = 0))]
 
@@ -118,7 +119,7 @@ rf.gold <- rf.filtered[, .SD[.N], by = .(UID, CREATE_DATE)][, .(UID, CNT_CURRENT
 cuts.gold = c(0, 50000, 100000, 250000, 500000, 1000000, 10000000, 100000000)
 labels.gold = c("0-49,999", "50,000-99,999", "100,000-249,999", "250,000-499,999", "500,000-999,999", 
                   "1,000,000-9,999,999", "10,000,000-100,000,000")
-labels.gold2 = c("0", "1-49,999", "50,000-99,999", "100,000-249,999", "250,000-499,999", "500,000-999,999", 
+labels.gold2 = c("0", "0-49,999", "50,000-99,999", "100,000-249,999", "250,000-499,999", "500,000-999,999", 
                 "1,000,000-9,999,999", "10,000,000-100,000,000")
 rf.gold[, GOLD.RANGES := as.character(cut(CNT_CURRENT, breaks = cuts.gold, labels = labels.gold, right = FALSE))]
 
@@ -155,25 +156,23 @@ allmerged <- Reduce(function(x, y) merge(x, y, by = "UID", all.x = TRUE), list(r
 ##### PREP FOR RF
 allmerged[is.na(allmerged)] <- 0
 
+
+
 ### Make cuts into ordered factors
 allmerged.factors$SPIN.RANGES <- factor(allmerged$SPIN.RANGES, levels = labels.spins)
 allmerged.factors$GOLD.RANGES <- factor(allmerged$GOLD.RANGES, levels = labels.gold2)
 allmerged.factors$LEVEL.RANGES <- factor(allmerged$LEVEL.RANGES, levels = labels.levels2)
-allmerged.factors$WINAMOUNT.RANGES <- factor(allmerged$WINAMOUNT.RANGES, levels = labels.winamount)
-allmerged.factors$WINCOUNT.RANGES <- factor(allmerged$WINCOUNT.RANGES, levels = labels.wincount)
-
+allmerged.factors$WINAMOUNT.RANGES <- factor(allmerged$WINAMOUNT.RANGES, levels = labels.winamount2)
+allmerged.factors$WINCOUNT.RANGES <- factor(allmerged$WINCOUNT.RANGES, levels = labels.wincount2)
 
 ### RANDOM FOREST
 allmerged.factors <- allmerged[, lapply(.SD, as.factor)]
-
 
 ## Check for NAs
 # lapply(allmerged.factors, function(x) sum(is.na(x)))
 # allmerged.factors[is.na(GOLD.RANGES)]
 
 ###
-
-
 B2 <- Boruta(`1` ~ SPIN.RANGES + SLOTS_ENTERED + 
                LEVEL.RANGES + GOLD.RANGES + COLLECTHRLY +
                WINAMOUNT.RANGES + WINCOUNT.RANGES, allmerged.factors)
@@ -181,6 +180,8 @@ B2 <- Boruta(`1` ~ SPIN.RANGES + SLOTS_ENTERED +
 B2
 getSelectedAttributes(B2)
 plot(B2, cex.axis = .76, las = 2)
+
+
 
 ### Function
 rf.funct <- function(dat, predictor, feature){
@@ -198,5 +199,11 @@ rf.funct <- function(dat, predictor, feature){
 }
 
 ## Test 
+rf.funct(allmerged.factors, "`1`", "SPIN.RANGES")
+rf.funct(allmerged.factors, "`1`", "LEVEL.RANGES")
+rf.funct(allmerged.factors, "`1`", "GOLD.RANGES")
+rf.funct(allmerged.factors, "`1`", "COLLECTHRLY")
+rf.funct(allmerged.factors, "`1`", "WINAMOUNT.RANGES")
 rf.funct(allmerged.factors, "`1`", "WINCOUNT.RANGES")
+rf.funct(allmerged.factors, "`1`", "SLOTS_ENTERED")
 
