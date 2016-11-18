@@ -42,7 +42,7 @@ library(Hmisc)
 
 # Pick retention day FOR FINDING DAY 3 RETENTION SET TO <= 2
 rf.filtered.retention <- rf.clean
-rf.filtered <- rf.clean[DIFF == 0] # [DIFF == 0] SHOULD BE -1 day of what i want to check
+rf.filtered <- rf.clean[DIFF <= 6] # [DIFF == 0] SHOULD BE -1 day of what i want to check
 
 # Facebook info
 rf.facebook.info <- rf.filtered[, .(UID, GENDER, PROVIDER)]
@@ -133,6 +133,12 @@ setnames(rf.cheerup, "V1", "UID")
 rf.collecthourly <- rf.filtered[CONTENT == "COLLECT", .N, by = UID]
 setnames(rf.collecthourly, "N", "COLLECTHRLY")
 
+cuts.collecthourly = c(0, 2, 5, 10, 25, 50, 100, 500)
+labels.collecthourly = c("0-1", "2-4", "5-9", "10-24", "25-49","50-99", "100-500")
+labels.collecthourly2 = c("0", "0-1", "2-4", "5-9", "10-24", "25-49","50-99", "100-500")
+
+rf.collecthourly[, COLLECT.RANGES := as.character(cut(COLLECTHRLY, breaks = cuts.collecthourly, labels = labels.collecthourly, right = FALSE))]
+
 # DOUBLEUP (SUBCONTENT)
 rf.doubleup <- rf.filtered[SUBCONTENT == "DOUBLEUP", .(unique(UID))]
 rf.doubleup[, DOUBLEUP := 1]
@@ -166,15 +172,17 @@ allmerged.factors$GOLD.RANGES <- factor(allmerged$GOLD.RANGES, levels = labels.g
 allmerged.factors$LEVEL.RANGES <- factor(allmerged$LEVEL.RANGES, levels = labels.levels2)
 allmerged.factors$WINAMOUNT.RANGES <- factor(allmerged$WINAMOUNT.RANGES, levels = labels.winamount2)
 allmerged.factors$WINCOUNT.RANGES <- factor(allmerged$WINCOUNT.RANGES, levels = labels.wincount2)
+allmerged.factors$COLLECT.RANGES <- factor(allmerged$COLLECT.RANGES, levels = labels.collecthourly2)
+
 
 ## Check for NAs
 # lapply(allmerged.factors, function(x) sum(is.na(x)))
 # allmerged.factors[is.na(GOLD.RANGES)]
 
 ###
-B2 <- Boruta(`1` ~ SPIN.RANGES + SLOTS_ENTERED + 
-               LEVEL.RANGES + GOLD.RANGES + COLLECTHRLY +
-               WINAMOUNT.RANGES + WINCOUNT.RANGES, allmerged.factors)
+B2 <- Boruta(`7` ~ SPIN.RANGES + SLOTS_ENTERED + 
+               LEVEL.RANGES + GOLD.RANGES + WINAMOUNT.RANGES + WINCOUNT.RANGES + FIRSTSLOT + LASTSLOT + COLLECT.RANGES +
+               CHEERUP + DOUBLEUP + SHARE + GENDER + PROVIDER + MOSTPLAYEDSLOT, allmerged.factors)
 
 B2
 getSelectedAttributes(B2)
@@ -198,11 +206,14 @@ rf.funct <- function(dat, predictor, feature){
 }
 
 ## Test 
-rf.funct(allmerged.factors, "`1`", "SPIN.RANGES")
-rf.funct(allmerged.factors, "`1`", "LEVEL.RANGES")
-rf.funct(allmerged.factors, "`1`", "GOLD.RANGES")
-rf.funct(allmerged.factors, "`1`", "COLLECTHRLY")
-rf.funct(allmerged.factors, "`1`", "WINAMOUNT.RANGES")
-rf.funct(allmerged.factors, "`1`", "WINCOUNT.RANGES")
-rf.funct(allmerged.factors, "`1`", "SLOTS_ENTERED")
+rf.funct(allmerged.factors, "`7`", "SPIN.RANGES")
+rf.funct(allmerged.factors, "`7`", "LEVEL.RANGES")
+rf.funct(allmerged.factors, "`7`", "GOLD.RANGES")
+rf.funct(allmerged.factors, "`7`", "COLLECT.RANGES")
+rf.funct(allmerged.factors, "`7`", "WINAMOUNT.RANGES")
+rf.funct(allmerged.factors, "`7`", "WINCOUNT.RANGES")
+rf.funct(allmerged.factors, "`7`", "CHEERUP")
+rf.funct(allmerged.factors, "`7`", "DOUBLEUP")
+rf.funct(allmerged.factors, "`7`", "SHARE")
+rf.funct(allmerged.factors, "`7`", "GENDER")
 
