@@ -16,19 +16,19 @@ library(data.table)
 #library(anytime)
 library(Hmisc)
 
-# # # Load
-# # # Create directory
+### Load
+## Create directory
 # sysdate <- format(Sys.Date(), "%Y%m%d")
 # querydirectory <- file.path("C:/Users/antpc/Desktop/Vegas/Analytics/Query", sysdate)
 # 
 # # Load files
 # rf <- list.files(querydirectory, full.names = TRUE)
 # rf.bind <- data.table(rbindlist(lapply(rf, read_csv)))
-
+# 
 ### Start
-
+# 
 ### 1 day retention
-# Default Filters
+## Default Filters
 # rf.base <- rf.bind[COUNTRY != "KR" & APP == "VEGAS" & TYPE == "GOLD"][order(UID, CREATE_DATE)]
 # rf.base[, c("MAX_LEVEL", "LOGIN_DATE", "EMAIL", "COUNTRY", "AGE_RANGE", "FRIENDS_COUNT", "TYPE", "APP") := NULL]
 # 
@@ -42,7 +42,7 @@ library(Hmisc)
 
 # Pick retention day FOR FINDING DAY 3 RETENTION SET TO <= 2
 rf.filtered.retention <- rf.clean
-rf.filtered <- rf.clean[DIFF <= 6] # [DIFF == 0] SHOULD BE -1 day of what i want to check
+rf.filtered <- rf.clean[DIFF == 0] # [DIFF == 0] SHOULD BE -1 day of what i want to check
 
 # Facebook info
 rf.facebook.info <- rf.filtered[, .(UID, GENDER, PROVIDER)]
@@ -180,7 +180,7 @@ allmerged.factors$COLLECT.RANGES <- factor(allmerged$COLLECT.RANGES, levels = la
 # allmerged.factors[is.na(GOLD.RANGES)]
 
 ###
-B2 <- Boruta(`7` ~ SPIN.RANGES + SLOTS_ENTERED + 
+B2 <- Boruta(`1` ~ SPIN.RANGES + SLOTS_ENTERED + 
                LEVEL.RANGES + GOLD.RANGES + WINAMOUNT.RANGES + WINCOUNT.RANGES + FIRSTSLOT + LASTSLOT + COLLECT.RANGES +
                CHEERUP + DOUBLEUP + SHARE + GENDER + PROVIDER + MOSTPLAYEDSLOT, allmerged.factors)
 
@@ -191,29 +191,29 @@ plot(B2, cex.axis = .70, las = 2)
 
 
 ### Function
-rf.funct <- function(dat, predictor, feature){
-  dat <- dat[, .N, c(predictor, feature)] 
-  dat[, PERCENT := paste0(100*round(N/sum(N),2), "%"), by = c(feature)]
-  
-  ggplot(dat, aes_string(predictor, "N", fill = predictor, label = "PERCENT")) +
-    geom_bar(stat = 'identity', position = "dodge", color = "black") +
-    scale_fill_few() +
-    theme(legend.position = "none") +
-    xlab("") +
-    ylab("") +
-    geom_text(size = 3, vjust = -.5, fontface = "bold") +
-    facet_wrap(feature, scales = 'free')
-}
+# rf.funct <- function(dat, predictor, feature){
+#   dat <- dat[, .N, c(predictor, feature)] 
+#   dat[, PERCENT := paste0(100*round(N/sum(N),2), "%"), by = c(feature)]
+#   
+#   ggplot(dat, aes_string(predictor, "N", fill = predictor, label = "PERCENT")) +
+#     geom_bar(stat = 'identity', position = "dodge", color = "black") +
+#     scale_fill_few() +
+#     theme(legend.position = "none") +
+#     xlab("") +
+#     ylab("") +
+#     geom_text(size = 3, vjust = -.5, fontface = "bold") +
+#     facet_wrap(feature, scales = 'free')
+# }
 
 ## Test 
-rf.funct(allmerged.factors, "`7`", "SPIN.RANGES")
-rf.funct(allmerged.factors, "`7`", "LEVEL.RANGES")
-rf.funct(allmerged.factors, "`7`", "GOLD.RANGES")
-rf.funct(allmerged.factors, "`7`", "COLLECT.RANGES")
-rf.funct(allmerged.factors, "`7`", "WINAMOUNT.RANGES")
-rf.funct(allmerged.factors, "`7`", "WINCOUNT.RANGES")
-rf.funct(allmerged.factors, "`7`", "CHEERUP")
-rf.funct(allmerged.factors, "`7`", "DOUBLEUP")
-rf.funct(allmerged.factors, "`7`", "SHARE")
-rf.funct(allmerged.factors, "`7`", "GENDER")
+# rf.funct(allmerged.factors, "`1`", "SPIN.RANGES")
+# rf.funct(allmerged.factors, "`1`", "LEVEL.RANGES")
+# rf.funct(allmerged.factors, "`1`", "GOLD.RANGES")
+# rf.funct(allmerged.factors, "`1`", "COLLECT.RANGES")
+# rf.funct(allmerged.factors, "`1`", "WINAMOUNT.RANGES")
+# rf.funct(allmerged.factors, "`1`", "WINCOUNT.RANGES")
+# rf.funct(allmerged.factors, "`1`", "CHEERUP")
+# rf.funct(allmerged.factors, "`1`", "DOUBLEUP")
+# rf.funct(allmerged.factors, "`1`", "SHARE")
+# rf.funct(allmerged.factors, "`1`", "GENDER")
 
