@@ -58,28 +58,57 @@ labels.spins = c("0-99", "100-249", "250-499", "500-999", "1,000-2,499", "2,500-
 rf.spins[, SPIN.RANGES := as.character(cut(SPINS, breaks = cuts.spins, labels = labels.spins, right = FALSE))]
 
 # Win count ##ADD RANGES
-rf.wincount <- rf.filtered[SUBCONTENT == "WIN", .N, by = UID]
-setnames(rf.wincount, "N", "WIN_COUNT")
-
-cuts.wincount = c(0, 100, 250, 500, 1000, 2500, 5000, 10000, 50000)
-labels.wincount = c("0-99", "100-249", "250-499", "500-999", "1,000-2,499", "2,500-4,999", "5,000-9,999", "10,000-50,000")
-labels.wincount2 = c("0", "0-99", "100-249", "250-499", "500-999", "1,000-2,499", "2,500-4,999", "5,000-9,999", "10,000-50,000")
-
-
-rf.wincount[, WINCOUNT.RANGES := as.character(cut(WIN_COUNT, breaks = cuts.wincount, labels = labels.wincount, right = FALSE))]
+# rf.wincount <- rf.filtered[SUBCONTENT == "WIN", .N, by = UID]
+# setnames(rf.wincount, "N", "WIN_COUNT")
+# 
+# cuts.wincount = c(0, 100, 250, 500, 1000, 2500, 5000, 10000, 50000)
+# labels.wincount = c("0-99", "100-249", "250-499", "500-999", "1,000-2,499", "2,500-4,999", "5,000-9,999", "10,000-50,000")
+# labels.wincount2 = c("0", "0-99", "100-249", "250-499", "500-999", "1,000-2,499", "2,500-4,999", "5,000-9,999", "10,000-50,000")
+# 
+# 
+# rf.wincount[, WINCOUNT.RANGES := as.character(cut(WIN_COUNT, breaks = cuts.wincount, labels = labels.wincount, right = FALSE))]
 
 # Win amount
-rf.winamount <- rf.filtered[SUBCONTENT == "WIN"]
-rf.winamount <- rf.winamount[, abs(sum(CNT_USE)), by = UID]
-setnames(rf.winamount, "V1", "WIN_SUM")
+# rf.winamount <- rf.filtered[SUBCONTENT == "WIN"]
+# rf.winamount <- rf.winamount[, abs(sum(CNT_USE)), by = UID]
+# setnames(rf.winamount, "V1", "WIN_SUM")
+# 
+# 
+# cuts.winamount = c(0, 50000, 100000, 250000, 500000, 1000000, 10000000, 100000000)
+# labels.winamount = c("0-49,999", "50,000-99,999", "100,000-249,999", "250,000-499,999", "500,000-999,999", 
+#                 "1,000,000-9,999,999", "10,000,000-100,000,000")
+# labels.winamount2 = c("0", "0-49,999", "50,000-99,999", "100,000-249,999", "250,000-499,999", "500,000-999,999", 
+#                  "1,000,000-9,999,999", "10,000,000-100,000,000")
+# rf.winamount[, WINAMOUNT.RANGES := as.character(cut(WIN_SUM, breaks = cuts.winamount, labels = labels.winamount, right = FALSE))]
 
 
-cuts.winamount = c(0, 50000, 100000, 250000, 500000, 1000000, 10000000, 100000000)
-labels.winamount = c("0-49,999", "50,000-99,999", "100,000-249,999", "250,000-499,999", "500,000-999,999", 
-                "1,000,000-9,999,999", "10,000,000-100,000,000")
-labels.winamount2 = c("0", "0-49,999", "50,000-99,999", "100,000-249,999", "250,000-499,999", "500,000-999,999", 
-                 "1,000,000-9,999,999", "10,000,000-100,000,000")
-rf.winamount[, WINAMOUNT.RANGES := as.character(cut(WIN_SUM, breaks = cuts.winamount, labels = labels.winamount, right = FALSE))]
+# test winspinration
+rf.spin.win.ratio <- rf.filtered[SUBCONTENT == "SPIN" | SUBCONTENT == "WIN", .N, by = .(UID, SUBCONTENT)]
+rf.spin.win.ratio[, PERCENT:= 100 * round((N[2]/sum(N)),2), by = UID]
+rf.spin.win.ratio <- rf.spin.win.ratio[, unique(PERCENT), by = UID]
+setnames(rf.spin.win.ratio, "V1", "WINSPIN.RATIO")
+
+cuts.spin.win.ratio = c(0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 75, 100, 500, 1000)
+labels.spin.win.ratio = c("0-4", "5-9", "10-14", "15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "50-74", "75-99",
+                          "100-499", "500-1000")
+labels.spin.win.ratio2 = c("0", "0-4", "5-9", "10-14", "15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "50-74", "75-99",
+                           "100-499", "500-1000")
+
+rf.spin.win.ratio[, SPIN.WIN.RATIOS.RANGES := as.character(cut(WINSPIN.RATIO, breaks = cuts.spin.win.ratio, 
+                                                               labels = labels.spin.win.ratio, right = FALSE))]
+
+
+# test winspinrationcnt_current
+rf.spin.win.ratio.amount <- rf.filtered[SUBCONTENT == "SPIN" | SUBCONTENT == "WIN", .(UID, SUBCONTENT, CNT_USE)]
+rf.spin.win.ratio.amount[, CNT_USE := abs(CNT_USE)]
+rf.spin.win.ratio.amount[, SUM := lapply(.SD, sum), by = .(UID, SUBCONTENT)] 
+rf.spin.win.ratio.amount <- rf.spin.win.ratio.amount[, unique(SUM), by = UID]
+rf.spin.win.ratio.amount[, PERCENT:= 100 * round((V1[2]/sum(V1)),2), by = UID][, V1 := NULL]
+rf.spin.win.ratio.amount <- rf.spin.win.ratio.amount[, unique(PERCENT), by = UID]
+setnames(rf.spin.win.ratio.amount, "V1", "WINSPIN.RATIOAMOUNT")
+
+rf.spin.win.ratio.amount[, SPIN.WIN.AMOUNT.RANGES := as.character(cut(WINSPIN.RATIOAMOUNT, breaks = cuts.spin.win.ratio, 
+                                                                      labels = labels.spin.win.ratio, right = FALSE))]
 
 
 
@@ -157,7 +186,8 @@ rf.filtered.retention1 <- dcast(rf.filtered.retention1, UID ~ DIFF, function(x) 
 allmerged <- Reduce(function(x, y) merge(x, y, by = "UID", all.x = TRUE), list(rf.spins, rf.firstslot, rf.lastslot, rf.slotenters, 
                                                                                rf.level, rf.gold, rf.cheerup, rf.doubleup, rf.facebook.share, 
                                                                                rf.collecthourly, rf.filtered.retention1, rf.facebook.info, 
-                                                                               rf.slotmostplayed, rf.winamount, rf.wincount))
+                                                                               rf.slotmostplayed, rf.winamount, rf.wincount, 
+                                                                               rf.spin.win.ratio, rf.spin.win.ratio.amount))
 
 ##### PREP FOR RF
 allmerged[is.na(allmerged)] <- 0
@@ -173,6 +203,9 @@ allmerged.factors$LEVEL.RANGES <- factor(allmerged$LEVEL.RANGES, levels = labels
 allmerged.factors$WINAMOUNT.RANGES <- factor(allmerged$WINAMOUNT.RANGES, levels = labels.winamount2)
 allmerged.factors$WINCOUNT.RANGES <- factor(allmerged$WINCOUNT.RANGES, levels = labels.wincount2)
 allmerged.factors$COLLECT.RANGES <- factor(allmerged$COLLECT.RANGES, levels = labels.collecthourly2)
+allmerged.factors$SPIN.WIN.RATIOS.RANGES <- factor(allmerged$SPIN.WIN.RATIOS.RANGES, levels = labels.spin.win.ratio2)
+allmerged.factors$SPIN.WIN.AMOUNT.RANGES <- factor(allmerged$SPIN.WIN.AMOUNT.RANGES, levels = labels.spin.win.ratio2)
+
 
 
 ## Check for NAs
@@ -181,13 +214,12 @@ allmerged.factors$COLLECT.RANGES <- factor(allmerged$COLLECT.RANGES, levels = la
 
 ###
 B2 <- Boruta(`1` ~ SPIN.RANGES + SLOTS_ENTERED + 
-               LEVEL.RANGES + GOLD.RANGES + WINAMOUNT.RANGES + WINCOUNT.RANGES + FIRSTSLOT + LASTSLOT + COLLECT.RANGES +
-               CHEERUP + DOUBLEUP + SHARE + GENDER + PROVIDER + MOSTPLAYEDSLOT, allmerged.factors)
+               LEVEL.RANGES + GOLD.RANGES + FIRSTSLOT + LASTSLOT + COLLECT.RANGES +
+               CHEERUP + DOUBLEUP + SHARE + GENDER + PROVIDER + MOSTPLAYEDSLOT + SPIN.WIN.RATIOS.RANGES + SPIN.WIN.AMOUNT.RANGES, allmerged.factors)
 
 B2
 getSelectedAttributes(B2)
 plot(B2, cex.axis = .70, las = 2)
-
 
 
 ### Function
@@ -210,10 +242,11 @@ plot(B2, cex.axis = .70, las = 2)
 # rf.funct(allmerged.factors, "`1`", "LEVEL.RANGES")
 # rf.funct(allmerged.factors, "`1`", "GOLD.RANGES")
 # rf.funct(allmerged.factors, "`1`", "COLLECT.RANGES")
-# rf.funct(allmerged.factors, "`1`", "WINAMOUNT.RANGES")
-# rf.funct(allmerged.factors, "`1`", "WINCOUNT.RANGES")
 # rf.funct(allmerged.factors, "`1`", "CHEERUP")
 # rf.funct(allmerged.factors, "`1`", "DOUBLEUP")
 # rf.funct(allmerged.factors, "`1`", "SHARE")
 # rf.funct(allmerged.factors, "`1`", "GENDER")
+# rf.funct(allmerged.factors, "`1`", "")
+# rf.funct(allmerged.factors, "`1`", "SPIN.WIN.RATIOS.RANGES")
+# rf.funct(allmerged.factors, "`1`", "SPIN.WIN.AMOUNT.RANGES")
 
