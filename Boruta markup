@@ -264,5 +264,38 @@ rf.funct(allmerged.factors, "`1`", "COLLECT.RANGES")
 rf.funct(allmerged.factors, "`1`", "SLOTS_ENTERED")
 ```
 
+### Most played slot
+### 가장 많이 스핀한 슬롯   
+```{r, echo = FALSE}
+rf.funct(allmerged.factors, "`1`", "MOSTPLAYEDSLOT")
+```
 
+### Cheerup 
+### Cheerup 사용 여부 유저   
+```{r, echo = FALSE}
+rf.funct(allmerged.factors, "`1`", "CHEERUP")
+```
 
+### Doubleup
+### Doubleup 사용 여부 유저  
+```{r, echo = FALSE}
+rf.funct(allmerged.factors, "`1`", "DOUBLEUP")
+```
+
+### Share
+### Facebook 공유 여부 유저  
+```{r, echo = FALSE}
+rf.funct(allmerged.factors, "`1`", "SHARE")
+```
+
+### User type
+### 계정 타입   
+```{r, echo = FALSE}
+rf.funct(allmerged.factors, "`1`", "PROVIDER")
+```
+
+### User gender
+### 성별  
+```{r, echo = FALSE}
+rf.funct(allmerged.factors, "`1`", "GENDER")
+```
