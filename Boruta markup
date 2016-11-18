@@ -216,44 +216,50 @@ B2 <- Boruta(`1` ~ SPIN.RANGES + SLOTS_ENTERED +
                CHEERUP + DOUBLEUP + SHARE + GENDER + PROVIDER + MOSTPLAYEDSLOT, allmerged.factors)
 ```
 
-
-## Boruta Importance
+## Feature importance
+## 요소 중요성 
 ```{r, echo = FALSE}
 plot(B2, cex.axis = .6, las = 2)
 ```
 
-
 ### Spin Ranges 
+### 스핀 횟수 범위 
 ```{r, echo = FALSE}
 rf.funct(allmerged.factors, "`1`", "SPIN.RANGES")
 ```
 
 ### Level ranges
+### 유저 레벨 범위 
 ```{r, echo = FALSE}
 rf.funct(allmerged.factors, "`1`", "LEVEL.RANGES")
 ```
 
 ### Gold ranges
+### 골드 보유 범위 
 ```{r, echo = FALSE}
 rf.funct(allmerged.factors, "`1`", "GOLD.RANGES")
 ```
 
 ### Win count ranges
+### 당첨 횟수 범위 
 ```{r, echo = FALSE}
 rf.funct(allmerged.factors, "`1`", "WINCOUNT.RANGES")
 ```
 
 ### Win amount ranges
+### 당첨 금액 범위 
 ```{r, echo = FALSE}
 rf.funct(allmerged.factors, "`1`", "WINAMOUNT.RANGES")
 ```
 
 ### Collects
+### Collect (1시간 기준) 범위 
 ```{r, echo = FALSE}
 rf.funct(allmerged.factors, "`1`", "COLLECT.RANGES")
 ```
 
 ### Slots played
+### 슬롯 몇개 플레이  
 ```{r, echo = FALSE}
 rf.funct(allmerged.factors, "`1`", "SLOTS_ENTERED")
 ```
