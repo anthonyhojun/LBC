@@ -1,5 +1,12 @@
-### Randomforest with retention 
-### Libraries
+---
+title: "Day 3 returns"
+output: html_document
+---
+
+*** 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
 library(ggplot2)
 library(ggthemes)
@@ -16,33 +23,39 @@ library(data.table)
 #library(anytime)
 library(Hmisc)
 
-### Load
-## Create directory
-# sysdate <- format(Sys.Date(), "%Y%m%d")
-# querydirectory <- file.path("C:/Users/antpc/Desktop/Vegas/Analytics/Query", sysdate)
-# 
-# # Load files
-# rf <- list.files(querydirectory, full.names = TRUE)
-# rf.bind <- data.table(rbindlist(lapply(rf, read_csv)))
-# 
-### Start
-# 
+```
+
+
+```{r pressure, echo=FALSE, message = FALSE, warning = FALSE}
+### Randomforest with retention 
+
+# Load
+# Create directory
+sysdate <- format(Sys.Date(), "%Y%m%d")
+querydirectory <- file.path("C:/Users/antpc/Desktop/Vegas/Analytics/Query", sysdate)
+
+# Load files
+rf <- list.files(querydirectory, full.names = TRUE)
+rf.bind <- data.table(rbindlist(lapply(rf, read_csv)))
+
+# Start
+
 ### 1 day retention
-## Default Filters
-# rf.base <- rf.bind[COUNTRY != "KR" & APP == "VEGAS" & TYPE == "GOLD"][order(UID, CREATE_DATE)]
-# rf.base[, c("MAX_LEVEL", "LOGIN_DATE", "EMAIL", "COUNTRY", "AGE_RANGE", "FRIENDS_COUNT", "TYPE", "APP") := NULL]
-# 
-# # Create date and provider filters
-# rf.clean <- rf.base[CREATE_ACCOUNT >= "2016-10-26" & UID > 6200] ##### Filter for marketing dates #####
-# 
-# rf.clean[, CREATE_ACCOUNT := substr(CREATE_ACCOUNT, 1, 10)]
-# rf.clean[, CREATE_DATE := substr(CREATE_DATE, 1, 10)]
-# 
-# rf.clean[, DIFF := as.integer(difftime(CREATE_DATE, CREATE_ACCOUNT, units = "days"))]
+# Default Filters
+rf.base <- rf.bind[COUNTRY != "KR" & APP == "VEGAS" & TYPE == "GOLD"][order(UID, CREATE_DATE)]
+invisible(rf.base[, c("MAX_LEVEL", "LOGIN_DATE", "EMAIL", "COUNTRY", "AGE_RANGE", "FRIENDS_COUNT", "TYPE", "APP") := NULL])
+
+# Create date and provider filters
+rf.clean <- rf.base[CREATE_ACCOUNT >= "2016-10-26" & UID > 6200]
+
+invisible(rf.clean[, CREATE_ACCOUNT := substr(CREATE_ACCOUNT, 1, 10)])
+invisible(rf.clean[, CREATE_DATE := substr(CREATE_DATE, 1, 10)])
+
+invisible(rf.clean[, DIFF := as.integer(difftime(CREATE_DATE, CREATE_ACCOUNT, units = "days"))])
 
 # Pick retention day FOR FINDING DAY 3 RETENTION SET TO <= 2
 rf.filtered.retention <- rf.clean
-rf.filtered <- rf.clean[DIFF == 0] # [DIFF == 0] SHOULD BE -1 day of what i want to check
+rf.filtered <- rf.clean[DIFF <= 2] # [DIFF == 0] SHOULD BE -1 day of what i want to check
 
 # Facebook info
 rf.facebook.info <- rf.filtered[, .(UID, GENDER, PROVIDER)]
@@ -55,60 +68,31 @@ setnames(rf.spins, "N", "SPINS")
 cuts.spins = c(0, 100, 250, 500, 1000, 2500, 5000, 10000, 50000)
 labels.spins = c("0-99", "100-249", "250-499", "500-999", "1,000-2,499", "2,500-4,999", "5,000-9,999", "10,000-50,000")
 
-rf.spins[, SPIN.RANGES := as.character(cut(SPINS, breaks = cuts.spins, labels = labels.spins, right = FALSE))]
+invisible(rf.spins[, SPIN.RANGES := as.character(cut(SPINS, breaks = cuts.spins, labels = labels.spins, right = FALSE))])
 
 # Win count ##ADD RANGES
-# rf.wincount <- rf.filtered[SUBCONTENT == "WIN", .N, by = UID]
-# setnames(rf.wincount, "N", "WIN_COUNT")
-# 
-# cuts.wincount = c(0, 100, 250, 500, 1000, 2500, 5000, 10000, 50000)
-# labels.wincount = c("0-99", "100-249", "250-499", "500-999", "1,000-2,499", "2,500-4,999", "5,000-9,999", "10,000-50,000")
-# labels.wincount2 = c("0", "0-99", "100-249", "250-499", "500-999", "1,000-2,499", "2,500-4,999", "5,000-9,999", "10,000-50,000")
-# 
-# 
-# rf.wincount[, WINCOUNT.RANGES := as.character(cut(WIN_COUNT, breaks = cuts.wincount, labels = labels.wincount, right = FALSE))]
+rf.wincount <- rf.filtered[SUBCONTENT == "WIN", .N, by = UID]
+setnames(rf.wincount, "N", "WIN_COUNT")
+
+cuts.wincount = c(0, 100, 250, 500, 1000, 2500, 5000, 10000, 50000)
+labels.wincount = c("0-99", "100-249", "250-499", "500-999", "1,000-2,499", "2,500-4,999", "5,000-9,999", "10,000-50,000")
+labels.wincount2 = c("0", "0-99", "100-249", "250-499", "500-999", "1,000-2,499", "2,500-4,999", "5,000-9,999", "10,000-50,000")
+
+
+invisible(rf.wincount[, WINCOUNT.RANGES := as.character(cut(WIN_COUNT, breaks = cuts.wincount, labels = labels.wincount, right = FALSE))])
 
 # Win amount
-# rf.winamount <- rf.filtered[SUBCONTENT == "WIN"]
-# rf.winamount <- rf.winamount[, abs(sum(CNT_USE)), by = UID]
-# setnames(rf.winamount, "V1", "WIN_SUM")
-# 
-# 
-# cuts.winamount = c(0, 50000, 100000, 250000, 500000, 1000000, 10000000, 100000000)
-# labels.winamount = c("0-49,999", "50,000-99,999", "100,000-249,999", "250,000-499,999", "500,000-999,999", 
-#                 "1,000,000-9,999,999", "10,000,000-100,000,000")
-# labels.winamount2 = c("0", "0-49,999", "50,000-99,999", "100,000-249,999", "250,000-499,999", "500,000-999,999", 
-#                  "1,000,000-9,999,999", "10,000,000-100,000,000")
-# rf.winamount[, WINAMOUNT.RANGES := as.character(cut(WIN_SUM, breaks = cuts.winamount, labels = labels.winamount, right = FALSE))]
+rf.winamount <- rf.filtered[SUBCONTENT == "WIN"]
+rf.winamount <- rf.winamount[, abs(sum(CNT_USE)), by = UID]
+setnames(rf.winamount, "V1", "WIN_SUM")
 
 
-# test winspinration
-rf.spin.win.ratio <- rf.filtered[SUBCONTENT == "SPIN" | SUBCONTENT == "WIN", .N, by = .(UID, SUBCONTENT)]
-rf.spin.win.ratio[, PERCENT:= 100 * round((N[2]/sum(N)),2), by = UID]
-rf.spin.win.ratio <- rf.spin.win.ratio[, unique(PERCENT), by = UID]
-setnames(rf.spin.win.ratio, "V1", "WINSPIN.RATIO")
-
-cuts.spin.win.ratio = c(0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 75, 100, 500, 1000)
-labels.spin.win.ratio = c("0-4", "5-9", "10-14", "15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "50-74", "75-99",
-                          "100-499", "500-1000")
-labels.spin.win.ratio2 = c("0", "0-4", "5-9", "10-14", "15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "50-74", "75-99",
-                           "100-499", "500-1000")
-
-rf.spin.win.ratio[, SPIN.WIN.RATIOS.RANGES := as.character(cut(WINSPIN.RATIO, breaks = cuts.spin.win.ratio, 
-                                                               labels = labels.spin.win.ratio, right = FALSE))]
-
-
-# test winspinrationcnt_current
-rf.spin.win.ratio.amount <- rf.filtered[SUBCONTENT == "SPIN" | SUBCONTENT == "WIN", .(UID, SUBCONTENT, CNT_USE)]
-rf.spin.win.ratio.amount[, CNT_USE := abs(CNT_USE)]
-rf.spin.win.ratio.amount[, SUM := lapply(.SD, sum), by = .(UID, SUBCONTENT)] 
-rf.spin.win.ratio.amount <- rf.spin.win.ratio.amount[, unique(SUM), by = UID]
-rf.spin.win.ratio.amount[, PERCENT:= 100 * round((V1[2]/sum(V1)),2), by = UID][, V1 := NULL]
-rf.spin.win.ratio.amount <- rf.spin.win.ratio.amount[, unique(PERCENT), by = UID]
-setnames(rf.spin.win.ratio.amount, "V1", "WINSPIN.RATIOAMOUNT")
-
-rf.spin.win.ratio.amount[, SPIN.WIN.AMOUNT.RANGES := as.character(cut(WINSPIN.RATIOAMOUNT, breaks = cuts.spin.win.ratio, 
-                                                                      labels = labels.spin.win.ratio, right = FALSE))]
+cuts.winamount = c(0, 50000, 100000, 250000, 500000, 1000000, 10000000, 100000000)
+labels.winamount = c("0-49,999", "50,000-99,999", "100,000-249,999", "250,000-499,999", "500,000-999,999", 
+                "1,000,000-9,999,999", "10,000,000-100,000,000")
+labels.winamount2 = c("0", "0-49,999", "50,000-99,999", "100,000-249,999", "250,000-499,999", "500,000-999,999", 
+                 "1,000,000-9,999,999", "10,000,000-100,000,000")
+invisible(rf.winamount[, WINAMOUNT.RANGES := as.character(cut(WIN_SUM, breaks = cuts.winamount, labels = labels.winamount, right = FALSE))])
 
 
 
@@ -139,7 +123,7 @@ cuts.levels = c(0, 5, 10, 15, 20, 50, 100)
 labels.levels = c("0-4", "5-9", "10-14", "15-19", "20-49", "50-100")
 labels.levels2 = c("0", "0-4", "5-9", "10-14", "15-19", "20-49", "50-100")
 
-rf.level[, LEVEL.RANGES := as.character(cut(LEVEL, breaks = cuts.levels, labels = labels.levels, right = FALSE, dig.lab = 0))]
+invisible(rf.level[, LEVEL.RANGES := as.character(cut(LEVEL, breaks = cuts.levels, labels = labels.levels, right = FALSE, dig.lab = 0))])
 
 
 # End of gold first day 
@@ -150,12 +134,12 @@ labels.gold = c("0-49,999", "50,000-99,999", "100,000-249,999", "250,000-499,999
                   "1,000,000-9,999,999", "10,000,000-100,000,000")
 labels.gold2 = c("0", "0-49,999", "50,000-99,999", "100,000-249,999", "250,000-499,999", "500,000-999,999", 
                 "1,000,000-9,999,999", "10,000,000-100,000,000")
-rf.gold[, GOLD.RANGES := as.character(cut(CNT_CURRENT, breaks = cuts.gold, labels = labels.gold, right = FALSE))]
+invisible(rf.gold[, GOLD.RANGES := as.character(cut(CNT_CURRENT, breaks = cuts.gold, labels = labels.gold, right = FALSE))])
 
 
 # CHEERUP
 rf.cheerup <- rf.filtered[CONTENT == "CHEERUP", .(unique(UID))]
-rf.cheerup[, CHEERUP := 1]
+invisible(rf.cheerup[, CHEERUP := 1])
 setnames(rf.cheerup, "V1", "UID")
 
 # COLLECTCOUNT
@@ -166,16 +150,16 @@ cuts.collecthourly = c(0, 2, 5, 10, 25, 50, 100, 500)
 labels.collecthourly = c("0-1", "2-4", "5-9", "10-24", "25-49","50-99", "100-500")
 labels.collecthourly2 = c("0", "0-1", "2-4", "5-9", "10-24", "25-49","50-99", "100-500")
 
-rf.collecthourly[, COLLECT.RANGES := as.character(cut(COLLECTHRLY, breaks = cuts.collecthourly, labels = labels.collecthourly, right = FALSE))]
+invisible(rf.collecthourly[, COLLECT.RANGES := as.character(cut(COLLECTHRLY, breaks = cuts.collecthourly, labels = labels.collecthourly, right = FALSE))])
 
 # DOUBLEUP (SUBCONTENT)
 rf.doubleup <- rf.filtered[SUBCONTENT == "DOUBLEUP", .(unique(UID))]
-rf.doubleup[, DOUBLEUP := 1]
+invisible(rf.doubleup[, DOUBLEUP := 1])
 setnames(rf.doubleup, "V1", "UID")
 
 # FACEBOOK SHARE
 rf.facebook.share <- rf.filtered[CONTENT == "SHARE", .(unique(UID))]
-rf.facebook.share[, SHARE := 1]
+invisible(rf.facebook.share[, SHARE := 1])
 setnames(rf.facebook.share, "V1", "UID")
 
 # SPREAD DATE
@@ -186,8 +170,7 @@ rf.filtered.retention1 <- dcast(rf.filtered.retention1, UID ~ DIFF, function(x) 
 allmerged <- Reduce(function(x, y) merge(x, y, by = "UID", all.x = TRUE), list(rf.spins, rf.firstslot, rf.lastslot, rf.slotenters, 
                                                                                rf.level, rf.gold, rf.cheerup, rf.doubleup, rf.facebook.share, 
                                                                                rf.collecthourly, rf.filtered.retention1, rf.facebook.info, 
-                                                                               rf.slotmostplayed, rf.winamount, rf.wincount, 
-                                                                               rf.spin.win.ratio, rf.spin.win.ratio.amount))
+                                                                               rf.slotmostplayed, rf.winamount, rf.wincount))
 
 ##### PREP FOR RF
 allmerged[is.na(allmerged)] <- 0
@@ -203,51 +186,117 @@ allmerged.factors$LEVEL.RANGES <- factor(allmerged$LEVEL.RANGES, levels = labels
 allmerged.factors$WINAMOUNT.RANGES <- factor(allmerged$WINAMOUNT.RANGES, levels = labels.winamount2)
 allmerged.factors$WINCOUNT.RANGES <- factor(allmerged$WINCOUNT.RANGES, levels = labels.wincount2)
 allmerged.factors$COLLECT.RANGES <- factor(allmerged$COLLECT.RANGES, levels = labels.collecthourly2)
-allmerged.factors$SPIN.WIN.RATIOS.RANGES <- factor(allmerged$SPIN.WIN.RATIOS.RANGES, levels = labels.spin.win.ratio2)
-allmerged.factors$SPIN.WIN.AMOUNT.RANGES <- factor(allmerged$SPIN.WIN.AMOUNT.RANGES, levels = labels.spin.win.ratio2)
-
 
 
 ## Check for NAs
 # lapply(allmerged.factors, function(x) sum(is.na(x)))
 # allmerged.factors[is.na(GOLD.RANGES)]
 
-###
-B2 <- Boruta(`1` ~ SPIN.RANGES + SLOTS_ENTERED + 
-               LEVEL.RANGES + GOLD.RANGES + FIRSTSLOT + LASTSLOT + COLLECT.RANGES +
-               CHEERUP + DOUBLEUP + SHARE + GENDER + PROVIDER + MOSTPLAYEDSLOT + SPIN.WIN.RATIOS.RANGES + 
-               SPIN.WIN.AMOUNT.RANGES, allmerged.factors)
-
-B2
-getSelectedAttributes(B2)
-plot(B2, cex.axis = .70, las = 2)
-
-
 ### Function
-# rf.funct <- function(dat, predictor, feature){
-#   dat <- dat[, .N, c(predictor, feature)] 
-#   dat[, PERCENT := paste0(100*round(N/sum(N),2), "%"), by = c(feature)]
-#   
-#   ggplot(dat, aes_string(predictor, "N", fill = predictor, label = "PERCENT")) +
-#     geom_bar(stat = 'identity', position = "dodge", color = "black") +
-#     scale_fill_few() +
-#     theme(legend.position = "none") +
-#     xlab("") +
-#     ylab("") +
-#     geom_text(size = 3, vjust = -.5, fontface = "bold") +
-#     facet_wrap(feature, scales = 'free')
-# }
+rf.funct <- function(dat, predictor, feature){
+  dat <- dat[, .N, c(predictor, feature)] 
+  invisible(dat[, PERCENT := paste0(100*round(N/sum(N),2), "%"), by = c(feature)])
+  
+  ggplot(dat, aes_string(predictor, "N", fill = predictor, label = "PERCENT")) +
+    geom_bar(stat = 'identity', position = "dodge", color = "black") +
+    scale_fill_few() +
+    theme(legend.position = "none") +
+    xlab("") +
+    ylab("") +
+    geom_text(size = 3, vjust = 0) +
+    facet_wrap(feature, scales = 'free')
+}
+```
 
-## Test 
-# rf.funct(allmerged.factors, "`1`", "SPIN.RANGES")
-# rf.funct(allmerged.factors, "`1`", "LEVEL.RANGES")
-# rf.funct(allmerged.factors, "`1`", "GOLD.RANGES")
-# rf.funct(allmerged.factors, "`1`", "COLLECT.RANGES")
-# rf.funct(allmerged.factors, "`1`", "CHEERUP")
-# rf.funct(allmerged.factors, "`1`", "DOUBLEUP")
-# rf.funct(allmerged.factors, "`1`", "SHARE")
-# rf.funct(allmerged.factors, "`1`", "GENDER")
-# rf.funct(allmerged.factors, "`1`", "")
-# rf.funct(allmerged.factors, "`1`", "SPIN.WIN.RATIOS.RANGES")
-# rf.funct(allmerged.factors, "`1`", "SPIN.WIN.AMOUNT.RANGES")
 
+```{r, echo = FALSE, message = FALSE}
+B2 <- Boruta(`3` ~ SPIN.RANGES + SLOTS_ENTERED + 
+               LEVEL.RANGES + GOLD.RANGES +
+               WINAMOUNT.RANGES + WINCOUNT.RANGES + FIRSTSLOT + LASTSLOT + COLLECT.RANGES +
+               CHEERUP + DOUBLEUP + SHARE + GENDER + PROVIDER + MOSTPLAYEDSLOT, allmerged.factors)
+```
+
+
+## Feature importance
+## 요소 중요성 
+```{r, echo = FALSE}
+plot(B2, cex.axis = .6, las = 2)
+```
+
+### Spin Ranges 
+### 스핀 횟수 범위 
+```{r, echo = FALSE}
+rf.funct(allmerged.factors, "`3`", "SPIN.RANGES")
+```
+
+### Level ranges
+### 유저 레벨 범위 
+```{r, echo = FALSE}
+rf.funct(allmerged.factors, "`3`", "LEVEL.RANGES")
+```
+
+### Gold ranges
+### 골드 보유 범위 
+```{r, echo = FALSE}
+rf.funct(allmerged.factors, "`3`", "GOLD.RANGES")
+```
+
+### Win count ranges
+### 당첨 횟수 범위 
+```{r, echo = FALSE}
+rf.funct(allmerged.factors, "`3`", "WINCOUNT.RANGES")
+```
+
+### Win amount ranges
+### 당첨 금액 범위 
+```{r, echo = FALSE}
+rf.funct(allmerged.factors, "`3`", "WINAMOUNT.RANGES")
+```
+
+### Collects
+### Collect (1시간 기준) 범위 
+```{r, echo = FALSE}
+rf.funct(allmerged.factors, "`3`", "COLLECT.RANGES")
+```
+
+### Slots played
+### 슬롯 몇개 플레이  
+```{r, echo = FALSE}
+rf.funct(allmerged.factors, "`3`", "SLOTS_ENTERED")
+```
+
+### Most played slot
+### 가장 많이 스핀한 슬롯   
+```{r, echo = FALSE}
+rf.funct(allmerged.factors, "`3`", "MOSTPLAYEDSLOT")
+```
+
+### Cheerup 
+### Cheerup 사용 여부 유저   
+```{r, echo = FALSE}
+rf.funct(allmerged.factors, "`3`", "CHEERUP")
+```
+
+### Doubleup
+### Doubleup 사용 여부 유저  
+```{r, echo = FALSE}
+rf.funct(allmerged.factors, "`3`", "DOUBLEUP")
+```
+
+### Share
+### Facebook 공유 여부 유저  
+```{r, echo = FALSE}
+rf.funct(allmerged.factors, "`3`", "SHARE")
+```
+
+### User type
+### 계정 타입   
+```{r, echo = FALSE}
+rf.funct(allmerged.factors, "`3`", "PROVIDER")
+```
+
+### User gender
+### 성별  
+```{r, echo = FALSE}
+rf.funct(allmerged.factors, "`3`", "GENDER")
+```
