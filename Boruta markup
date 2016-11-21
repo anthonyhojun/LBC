@@ -70,30 +70,34 @@ labels.spins = c("0-99", "100-249", "250-499", "500-999", "1,000-2,499", "2,500-
 
 invisible(rf.spins[, SPIN.RANGES := as.character(cut(SPINS, breaks = cuts.spins, labels = labels.spins, right = FALSE))])
 
-# Win count ##ADD RANGES
-rf.wincount <- rf.filtered[SUBCONTENT == "WIN", .N, by = UID]
-setnames(rf.wincount, "N", "WIN_COUNT")
+# winspinration
+rf.spin.win.ratio <- rf.filtered[SUBCONTENT == "SPIN" | SUBCONTENT == "WIN", .N, by = .(UID, SUBCONTENT)]
+invisible(rf.spin.win.ratio[, PERCENT:= 100 * round((N[2]/sum(N)),2), by = UID])
+rf.spin.win.ratio <- rf.spin.win.ratio[, unique(PERCENT), by = UID]
+setnames(rf.spin.win.ratio, "V1", "WINSPIN.RATIO")
 
-cuts.wincount = c(0, 100, 250, 500, 1000, 2500, 5000, 10000, 50000)
-labels.wincount = c("0-99", "100-249", "250-499", "500-999", "1,000-2,499", "2,500-4,999", "5,000-9,999", "10,000-50,000")
-labels.wincount2 = c("0", "0-99", "100-249", "250-499", "500-999", "1,000-2,499", "2,500-4,999", "5,000-9,999", "10,000-50,000")
+cuts.spin.win.ratio = c(0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 75, 100, 500, 1000)
+labels.spin.win.ratio = c("0-4", "5-9", "10-14", "15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "50-74", "75-99",
+                          "100-499", "500-1000")
+labels.spin.win.ratio2 = c("0", "0-4", "5-9", "10-14", "15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "50-74", "75-99",
+                           "100-499", "500-1000")
+
+invisible(rf.spin.win.ratio[, SPIN.WIN.RATIOS.RANGES := as.character(cut(WINSPIN.RATIO, breaks = cuts.spin.win.ratio, 
+                                                               labels = labels.spin.win.ratio, right = FALSE))])
 
 
-invisible(rf.wincount[, WINCOUNT.RANGES := as.character(cut(WIN_COUNT, breaks = cuts.wincount, labels = labels.wincount, right = FALSE))])
 
-# Win amount
-rf.winamount <- rf.filtered[SUBCONTENT == "WIN"]
-rf.winamount <- rf.winamount[, abs(sum(CNT_USE)), by = UID]
-setnames(rf.winamount, "V1", "WIN_SUM")
+# winspinrationcnt_current
+rf.spin.win.ratio.amount <- rf.filtered[SUBCONTENT == "SPIN" | SUBCONTENT == "WIN", .(UID, SUBCONTENT, CNT_USE)]
+invisible(rf.spin.win.ratio.amount[, CNT_USE := abs(CNT_USE)])
+invisible(rf.spin.win.ratio.amount[, SUM := lapply(.SD, sum), by = .(UID, SUBCONTENT)])
+rf.spin.win.ratio.amount <- rf.spin.win.ratio.amount[, unique(SUM), by = UID]
+invisible(rf.spin.win.ratio.amount[, PERCENT:= 100 * round((V1[2]/sum(V1)),2), by = UID][, V1 := NULL])
+rf.spin.win.ratio.amount <- rf.spin.win.ratio.amount[, unique(PERCENT), by = UID]
+setnames(rf.spin.win.ratio.amount, "V1", "WINSPIN.RATIOAMOUNT")
 
-
-cuts.winamount = c(0, 50000, 100000, 250000, 500000, 1000000, 10000000, 100000000)
-labels.winamount = c("0-49,999", "50,000-99,999", "100,000-249,999", "250,000-499,999", "500,000-999,999", 
-                "1,000,000-9,999,999", "10,000,000-100,000,000")
-labels.winamount2 = c("0", "0-49,999", "50,000-99,999", "100,000-249,999", "250,000-499,999", "500,000-999,999", 
-                 "1,000,000-9,999,999", "10,000,000-100,000,000")
-invisible(rf.winamount[, WINAMOUNT.RANGES := as.character(cut(WIN_SUM, breaks = cuts.winamount, labels = labels.winamount, right = FALSE))])
-
+invisible(rf.spin.win.ratio.amount[, SPIN.WIN.AMOUNT.RANGES := as.character(cut(WINSPIN.RATIOAMOUNT, breaks = cuts.spin.win.ratio, 
+                                                                      labels = labels.spin.win.ratio, right = FALSE))])
 
 
 # First slot entered
@@ -136,6 +140,10 @@ labels.gold2 = c("0", "0-49,999", "50,000-99,999", "100,000-249,999", "250,000-4
                 "1,000,000-9,999,999", "10,000,000-100,000,000")
 invisible(rf.gold[, GOLD.RANGES := as.character(cut(CNT_CURRENT, breaks = cuts.gold, labels = labels.gold, right = FALSE))])
 
+# EVENT
+rf.event <- rf.filtered[CONTENT == "EVENT", .(unique(UID))]
+invisible(rf.event[, EVENT := 1])
+setnames(rf.event, "V1", "UID")
 
 # CHEERUP
 rf.cheerup <- rf.filtered[CONTENT == "CHEERUP", .(unique(UID))]
@@ -170,7 +178,8 @@ rf.filtered.retention1 <- dcast(rf.filtered.retention1, UID ~ DIFF, function(x) 
 allmerged <- Reduce(function(x, y) merge(x, y, by = "UID", all.x = TRUE), list(rf.spins, rf.firstslot, rf.lastslot, rf.slotenters, 
                                                                                rf.level, rf.gold, rf.cheerup, rf.doubleup, rf.facebook.share, 
                                                                                rf.collecthourly, rf.filtered.retention1, rf.facebook.info, 
-                                                                               rf.slotmostplayed, rf.winamount, rf.wincount))
+                                                                               rf.slotmostplayed, rf.spin.win.ratio, rf.spin.win.ratio.amount,
+                                                                               rf.event))
 
 ##### PREP FOR RF
 allmerged[is.na(allmerged)] <- 0
@@ -183,8 +192,8 @@ allmerged.factors <- allmerged[, lapply(.SD, as.factor)]
 allmerged.factors$SPIN.RANGES <- factor(allmerged$SPIN.RANGES, levels = labels.spins)
 allmerged.factors$GOLD.RANGES <- factor(allmerged$GOLD.RANGES, levels = labels.gold2)
 allmerged.factors$LEVEL.RANGES <- factor(allmerged$LEVEL.RANGES, levels = labels.levels2)
-allmerged.factors$WINAMOUNT.RANGES <- factor(allmerged$WINAMOUNT.RANGES, levels = labels.winamount2)
-allmerged.factors$WINCOUNT.RANGES <- factor(allmerged$WINCOUNT.RANGES, levels = labels.wincount2)
+allmerged.factors$SPIN.WIN.RATIOS.RANGES <- factor(allmerged$SPIN.WIN.RATIOS.RANGES, levels = labels.spin.win.ratio2)
+allmerged.factors$SPIN.WIN.AMOUNT.RANGES <- factor(allmerged$SPIN.WIN.AMOUNT.RANGES, levels = labels.spin.win.ratio2)
 allmerged.factors$COLLECT.RANGES <- factor(allmerged$COLLECT.RANGES, levels = labels.collecthourly2)
 
 
@@ -193,109 +202,116 @@ allmerged.factors$COLLECT.RANGES <- factor(allmerged$COLLECT.RANGES, levels = la
 # allmerged.factors[is.na(GOLD.RANGES)]
 
 ### Function
-rf.funct <- function(dat, predictor, feature){
-  dat <- dat[, .N, c(predictor, feature)] 
-  invisible(dat[, PERCENT := paste0(100*round(N/sum(N),2), "%"), by = c(feature)])
+
+rf.funct <- function(feature){
   
-  ggplot(dat, aes_string(predictor, "N", fill = predictor, label = "PERCENT")) +
+  retention.check = "`1`"
+  
+  allmerged.factors <- allmerged.factors[, .N, c(retention.check, feature)]
+  invisible(allmerged.factors[, PERCENT := paste0(100*round(N/sum(N),2), "%"), by = c(feature)])
+  
+  ggplot(allmerged.factors, aes_string(retention.check, "N", fill = retention.check, label = "PERCENT")) +
     geom_bar(stat = 'identity', position = "dodge", color = "black") +
     scale_fill_few() +
     theme(legend.position = "none") +
     xlab("") +
     ylab("") +
-    geom_text(size = 3, vjust = 0) +
+    geom_text(size = 3, vjust = 1.2, fontface = "bold") +
     facet_wrap(feature, scales = 'free')
 }
 ```
 
 
-```{r, echo = FALSE, message = FALSE}
+```{r, echo = FALSE, message = FALSE, eval = FALSE}
 B2 <- Boruta(`1` ~ SPIN.RANGES + SLOTS_ENTERED + 
-               LEVEL.RANGES + GOLD.RANGES +
-               WINAMOUNT.RANGES + WINCOUNT.RANGES + FIRSTSLOT + LASTSLOT + COLLECT.RANGES +
-               CHEERUP + DOUBLEUP + SHARE + GENDER + PROVIDER + MOSTPLAYEDSLOT, allmerged.factors)
+               LEVEL.RANGES + GOLD.RANGES + FIRSTSLOT + LASTSLOT + COLLECT.RANGES + SPIN.WIN.RATIOS.RANGES + SPIN.WIN.AMOUNT.RANGES +
+               CHEERUP + DOUBLEUP + SHARE + GENDER + PROVIDER + MOSTPLAYEDSLOT + EVENT, allmerged.factors)
 ```
-
-## Feature importance
-## 요소 중요성 
-```{r, echo = FALSE}
+ 
+```{r, echo = FALSE, eval = FALSE}
 plot(B2, cex.axis = .6, las = 2)
 ```
 
 ### Spin Ranges 
 ### 스핀 횟수 범위 
 ```{r, echo = FALSE}
-rf.funct(allmerged.factors, "`1`", "SPIN.RANGES")
+rf.funct("SPIN.RANGES")
 ```
 
 ### Level ranges
 ### 유저 레벨 범위 
 ```{r, echo = FALSE}
-rf.funct(allmerged.factors, "`1`", "LEVEL.RANGES")
+rf.funct("LEVEL.RANGES")
 ```
 
 ### Gold ranges
 ### 골드 보유 범위 
 ```{r, echo = FALSE}
-rf.funct(allmerged.factors, "`1`", "GOLD.RANGES")
+rf.funct("GOLD.RANGES")
 ```
 
-### Win count ranges
-### 당첨 횟수 범위 
+### Win / spin ratio ranges
+### 당첨 횟수 비율 범위 
 ```{r, echo = FALSE}
-rf.funct(allmerged.factors, "`1`", "WINCOUNT.RANGES")
+rf.funct("SPIN.WIN.RATIOS.RANGES")
 ```
 
-### Win amount ranges
-### 당첨 금액 범위 
+### Win / spin ratio amount ranges
+### 당첨 금액 비율 범위 
 ```{r, echo = FALSE}
-rf.funct(allmerged.factors, "`1`", "WINAMOUNT.RANGES")
+rf.funct("SPIN.WIN.AMOUNT.RANGES")
 ```
 
 ### Collects
 ### Collect (1시간 기준) 범위 
 ```{r, echo = FALSE}
-rf.funct(allmerged.factors, "`1`", "COLLECT.RANGES")
+rf.funct("COLLECT.RANGES")
 ```
 
 ### Slots played
 ### 슬롯 몇개 플레이  
 ```{r, echo = FALSE}
-rf.funct(allmerged.factors, "`1`", "SLOTS_ENTERED")
+rf.funct("SLOTS_ENTERED")
 ```
 
 ### Most played slot
 ### 가장 많이 스핀한 슬롯   
 ```{r, echo = FALSE}
-rf.funct(allmerged.factors, "`1`", "MOSTPLAYEDSLOT")
+rf.funct("MOSTPLAYEDSLOT")
+```
+
+### Event 
+### Event (신규 유저 보상) 받음   
+```{r, echo = FALSE}
+rf.funct("CHEERUP")
 ```
 
 ### Cheerup 
 ### Cheerup 사용 여부 유저   
 ```{r, echo = FALSE}
-rf.funct(allmerged.factors, "`1`", "CHEERUP")
+rf.funct("CHEERUP")
 ```
 
 ### Doubleup
 ### Doubleup 사용 여부 유저  
 ```{r, echo = FALSE}
-rf.funct(allmerged.factors, "`1`", "DOUBLEUP")
+rf.funct("DOUBLEUP")
 ```
 
 ### Share
 ### Facebook 공유 여부 유저  
 ```{r, echo = FALSE}
-rf.funct(allmerged.factors, "`1`", "SHARE")
+rf.funct("SHARE")
 ```
 
 ### User type
 ### 계정 타입   
 ```{r, echo = FALSE}
-rf.funct(allmerged.factors, "`1`", "PROVIDER")
+rf.funct("PROVIDER")
 ```
 
 ### User gender
 ### 성별  
 ```{r, echo = FALSE}
-rf.funct(allmerged.factors, "`1`", "GENDER")
+rf.funct("GENDER")
 ```
