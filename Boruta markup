@@ -283,7 +283,7 @@ rf.funct("MOSTPLAYEDSLOT")
 ### Event 
 ### Event (신규 유저 보상) 받음   
 ```{r, echo = FALSE}
-rf.funct("CHEERUP")
+rf.funct("EVENT")
 ```
 
 ### Cheerup 
