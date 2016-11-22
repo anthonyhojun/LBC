@@ -53,9 +53,8 @@ vegas <- all[APP == "VEGAS" & CREATE_ACCOUNT >= "2016-10-26" & UID > 6240
 
 ```{r, sep users by date cohort for AB test}
 ## By date cohort
-invisible(vegas[CREATE_ACCOUNT >= "2016-10-26" & CREATE_ACCOUNT < "2016-11-04 15:20", GROUPBY := "A"])
-invisible(vegas[CREATE_ACCOUNT >= "2016-11-04 15:20" & CREATE_ACCOUNT < "2016-11-11", GROUPBY := "B"])
-invisible(vegas[CREATE_ACCOUNT >= "2016-11-11", GROUPBY := "C"])
+invisible(vegas[CREATE_ACCOUNT >= "2016-10-26" & CREATE_ACCOUNT < "2016-11-11", GROUPBY := "A"])
+invisible(vegas[CREATE_ACCOUNT >= "2016-11-11", GROUPBY := "B"])
 
 ## Odd and even users
 # invisible(vegas[, GROUPBY := ifelse(UID %% 2 == 0, "A", "B")])
@@ -151,9 +150,8 @@ graph.boxplot <- function(dat, yaxis){
 
 ##### **Groups**
 ##### 유저 그룹 
-###### `A = 2016-10-26 ~ 2016-11-04`
-###### `B = 2016-11-04 ~ 2016-11-10`
-###### `C = 2016-11-11 ~ 2016-11-18`
+###### `A = 2016-10-26 ~ 2016-11-10`
+###### `B = 2016-11-11 ~ Current`
 
 <!-- ##### **Groups** -->
 <!-- ##### 유저 그룹  -->
@@ -170,25 +168,23 @@ vegas[, lapply(.SD, uniqueN), by = GROUPBY, .SDcols = "UID"][order(GROUPBY)]
 ##### **Rolling Retention**  
 ##### 1일, 2일, 3일, 등 평균 retention
 ```{r Test Rolling retention, warning = FALSE, message = FALSE}
-invisible(rollingretention <- vegas[, ":=" (EVENT_CREATED_DATE = substr(CREATE_DATE, 0, 10), 
-              ACCOUNT_CREATED_DATE = substr(CREATE_ACCOUNT, 0, 10))][, .(UID, EVENT_CREATED_DATE, GROUPBY, ACCOUNT_CREATED_DATE)])
+rollingretention <- vegas[CREATE_ACCOUNT >= "2016-10-26" & UID > 6300, .(UID, GROUPBY, CREATE_DATE, CREATE_ACCOUNT)][order(UID)]
+invisible(rollingretention[, CREATE_ACCOUNT := substr(CREATE_ACCOUNT, 0, 10)])
+invisible(rollingretention[, CREATE_DATE := substr(CREATE_DATE, 0, 10)])
 
-rollingretention.byday <- unique(rollingretention, by = c("UID", "EVENT_CREATED_DATE"))
-invisible(rollingretention.byday[, DIFFERENCE := as.integer(difftime(EVENT_CREATED_DATE, ACCOUNT_CREATED_DATE, unit = "days"))])
-invisible(rollingretention.byday[, DUMMY := ifelse(DIFFERENCE > 0, 1, 0)])
 
-rollingretention.cast <- dcast(rollingretention.byday, UID + ACCOUNT_CREATED_DATE + EVENT_CREATED_DATE + GROUPBY ~ DIFFERENCE, fill = 0)
-invisible(rollingretention.cast[, '0' := 1])
+rollingretention.byday <- unique(rollingretention, by = c("UID", "CREATE_DATE"))
+invisible(rollingretention.byday[, DIFFERENCE := as.integer(difftime(CREATE_DATE, CREATE_ACCOUNT, unit = "days"))])
+rollingretention.cast <- dcast(rollingretention.byday, UID + CREATE_ACCOUNT + GROUPBY ~ DIFFERENCE, function(x) 1, fill = 0)
 
-retention <- rollingretention.cast[, lapply(.SD, function(x) 100 * (round(sum(x) / length(x), 2))), 
-                                                        by = GROUPBY, .SDcols = c(6:12)]
+retention <- rollingretention.cast[, lapply(.SD, function(x) 100 * (round(sum(x) / length(x), 2))), by = GROUPBY, .SDcols = c(5:11)]
 
 retention.long <- melt(retention, "GROUPBY")
 invisible(retention.long[, PERCENT := paste0(value, "%")])
 
 ggplot(retention.long) + 
   geom_bar(aes(variable, value, fill = GROUPBY), position = position_dodge(width=1), stat = "identity") + 
-  geom_text(aes(variable ,value,label = PERCENT, group = GROUPBY), position = position_dodge(width = 1), size = 3.5, vjust = -.5,   fontface = "bold") +
+  geom_text(aes(variable ,value,label = PERCENT, group = GROUPBY), position = position_dodge(width = 1), size = 2.5, vjust = -.5,   fontface = "bold") +
   theme_few() +
   xlab("days") +
   ylab("retention") +
@@ -201,6 +197,7 @@ ggplot(retention.long) +
 ```{r country distribution, echo = FALSE}
 country.unique <- unique(vegas, by = c("GROUPBY", "UID", "COUNTRY"))
 country.summary <- country.unique[, .N, by = c("GROUPBY", "COUNTRY")][order(GROUPBY, -N)]
+country.summary <- country.summary[, .SD[1:5], by = GROUPBY]
 invisible(percentage.func("country.summary", "N"))
 
 ggplot(country.summary, aes(reorder(COUNTRY,-N), N, label = Percent)) +
@@ -583,6 +580,25 @@ ggplot(slots.avg.merged.summary.percent, aes(ID, N, label = Percent, fill = ID))
   theme(legend.position="none") +
   facet_wrap(SLOTS.PLAYED~GROUPBY, scales = "free")
 ```
+ 
+```{r, eval = FALSE}
+# tes <- rf.bind[, .(UID, COUNTRY, CREATE_ACCOUNT, CREATE_DATE)]
+# tes <- tes[COUNTRY != "KR" & UID > 6300 & CREATE_ACCOUNT >= "2016-10-26"]
+# tes[, CREATE_ACCOUNT := substr(CREATE_ACCOUNT, 1, 10)]
+# tes[, CREATE_DATE := substr(CREATE_DATE, 1, 10)]
+# tes[, DIFFERENCE := as.integer(difftime(CREATE_DATE, CREATE_ACCOUNT, unit = "days"))]
 
+au <- unique(tes, by = c("UID", "DIFFERENCE"))
+au <- au[order(UID)]
+
+#au <- tes[COUNTRY == "AU"]
+au[, CREATE_DATE := NULL]
+
+au.cast <- dcast(au, UID + CREATE_ACCOUNT + COUNTRY ~ DIFFERENCE, function(x) 1, fill = 0)
+
+au.cast <- au.cast[, lapply(.SD, function(x) (100 * round(sum(x)/length(x), 2))),by = COUNTRY, .SDcols = 4:15]
+
+write.csv(au.cast, "retentionbycountry.csv")
+```
 
 <!-- ## add double up click/appearance next patch-->
