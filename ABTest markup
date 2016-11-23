@@ -53,8 +53,8 @@ vegas <- all[APP == "VEGAS" & CREATE_ACCOUNT >= "2016-10-26" & UID > 6240
 
 ```{r, sep users by date cohort for AB test}
 ## By date cohort
-invisible(vegas[CREATE_ACCOUNT >= "2016-10-26" & CREATE_ACCOUNT < "2016-11-11", GROUPBY := "A"])
-invisible(vegas[CREATE_ACCOUNT >= "2016-11-11", GROUPBY := "B"])
+invisible(vegas[CREATE_ACCOUNT >= "2016-11-11" & CREATE_ACCOUNT < "2016-11-18", GROUPBY := "A"])
+invisible(vegas[CREATE_ACCOUNT >= "2016-11-18", GROUPBY := "B"])
 
 ## Odd and even users
 # invisible(vegas[, GROUPBY := ifelse(UID %% 2 == 0, "A", "B")])
@@ -150,8 +150,8 @@ graph.boxplot <- function(dat, yaxis){
 
 ##### **Groups**
 ##### 유저 그룹 
-###### `A = 2016-10-26 ~ 2016-11-10`
-###### `B = 2016-11-11 ~ Current`
+###### `A = 2016-11-11 ~ 2016-11-17`
+###### `B = 2016-11-18 ~ Current`
 
 <!-- ##### **Groups** -->
 <!-- ##### 유저 그룹  -->
@@ -265,6 +265,32 @@ graph.boxplot("abandoning.users.subset", "MAX_LEVEL") +
   geom_text(data = abandoning.users.subset.median, aes(GROUPBY, V1, label = V1), vjust = -1.3)
 ```
 
+
+##### **Median gold for abandoned users x level**
+##### 이탈한 유저 레벨 별 중앙 골드 
+```{r Gold average where users are leaving, message = FALSE, warning = FALSE}
+abandon.median.gold <- vegas[CONTENT == "LEVELUP" & TYPE == "GOLD"]
+invisible(abandon.median.gold[, ABANDONED := as.integer(difftime(Sys.Date(), LOGIN_DATE, units = "days"))])
+abandon.median.gold <- abandon.median.gold[ABANDONED >= 3, .(UID, CNT_CURRENT, MAX_LEVEL, GROUPBY)]
+abandon.median.gold <- abandon.median.gold[MAX_LEVEL <= 10]
+abandon.median.gold <- abandon.median.gold[, .SD[.N], by = UID]
+abandon.median.gold$MAX_LEVEL <- as.factor(abandon.median.gold$MAX_LEVEL)
+
+abandon.median.gold.percent <- abandon.median.gold[, MEDIAN := as.double(median(CNT_CURRENT)), by = .(GROUPBY, MAX_LEVEL)]
+abandon.median.gold.percent <- unique(abandon.median.gold.percent, by = c("GROUPBY", "MAX_LEVEL"))
+
+ggplot(abandon.median.gold, aes(MAX_LEVEL, CNT_CURRENT, group = MAX_LEVEL)) +
+  geom_boxplot(fill = "light blue") +
+  ylab("Gold") +
+  xlab("Level") +
+  theme_gdocs() +
+  theme(legend.position="none") +
+  ylim(0, quantile(abandon.median.gold$CNT_CURRENT, .95)) +
+  geom_text(data = abandon.median.gold.percent, aes(MAX_LEVEL, MEDIAN, label = MEDIAN), size = 2.3, vjust = -1, fontface = "bold") +
+  facet_wrap(~GROUPBY)
+
+```
+
 ##### **First slot entered**
 ##### 게임 설치 후 첫 슬롯 입장 (스핀 1번 이상)
 ```{r First slot entered}
@@ -327,6 +353,27 @@ graph.boxplot("slots.played.vegas", "SLOTS.PLAYED") +
   geom_text(data = slots.played.vegas.median, aes(GROUPBY, V1, label = V1), vjust = -1, size = 3.5)
   
 ```
+
+
+##### **Gold earn medians per level **
+##### 중앙 골드 획득 x 레벨 
+```{r, warning = FALSE, error=FALSE}
+gold.drops <- vegas[CONTENT == "LEVELUP" & TYPE == "GOLD", .(UID, GROUPBY, ID, CNT_CURRENT)]
+invisible(gold.drops[, DIFFERENCE := CNT_CURRENT - lag(CNT_CURRENT), by = .(GROUPBY, UID)])
+gold.drops <- na.omit(gold.drops)
+gold.drops$ID <- as.integer(gold.drops$ID)
+gold.drops <- gold.drops[ID < 11]
+gold.drops$ID <- as.factor(gold.drops$ID)
+
+invisible(gold.drops.median <- gold.drops[, MEDIAN := as.double(median(DIFFERENCE)), by = .(GROUPBY, ID)])
+
+ggplot(gold.drops, aes(ID, DIFFERENCE), group = ID, fill = ID) +
+  geom_boxplot() +
+  ylim(-75000, quantile(gold.drops$DIFFERENCE, .95)) +
+  geom_text(data = gold.drops.median, aes(ID, MEDIAN, label = MEDIAN), size = 2.5, vjust = -1) +
+  facet_wrap(~GROUPBY)
+```
+
 
 > ### **Gems**
 
@@ -432,6 +479,20 @@ ggplot(cheerup.cnt.unique.summary, aes(CHEERUP_CNT, N, label = Percent)) +
 
 ```
 
+##### **Gold amount when users get cheer up**
+##### Cheerup x 중앙 골드 보유 
+```{r}
+# WHERE ARE USERS getting cheerup
+cheerup.gold.range <- vegas[CONTENT == "CHEERUP", .(UID, GROUPBY, CNT_USE, CNT_CURRENT)]
+invisible(cheerup.gold.range[, CNT_CURRENT := CNT_CURRENT + CNT_USE][, c("UID", "CNT_USE") := NULL])
+
+cheerup.gold.range.median <- cheerup.gold.range[, MEDIAN := as.integer(median(CNT_CURRENT)), by = GROUPBY]
+
+graph.boxplot("cheerup.gold.range", "CNT_CURRENT")  +
+    geom_text(data = cheerup.gold.range.median, aes(GROUPBY, MEDIAN, label = MEDIAN), vjust = -.8, size = 3.5)
+```
+
+ 
 > ### **Social**
 
 ***
@@ -601,4 +662,5 @@ au.cast <- au.cast[, lapply(.SD, function(x) (100 * round(sum(x)/length(x), 2)))
 write.csv(au.cast, "retentionbycountry.csv")
 ```
 
-<!-- ## add double up click/appearance next patch-->
+
+
