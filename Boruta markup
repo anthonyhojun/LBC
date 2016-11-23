@@ -36,14 +36,14 @@ querydirectory <- file.path("C:/Users/antpc/Desktop/Vegas/Analytics/Query", sysd
 
 # Load files
 rf <- list.files(querydirectory, full.names = TRUE)
-rf.bind <- data.table(rbindlist(lapply(rf, read_csv)))
+vegas <- data.table(rbindlist(lapply(rf, read_csv)))
 
 # Start
 
 ### 1 day retention
 # Default Filters
-rf.base <- rf.bind[COUNTRY != "KR" & APP == "VEGAS" & TYPE == "GOLD"][order(UID, CREATE_DATE)]
-invisible(rf.base[, c("MAX_LEVEL", "LOGIN_DATE", "EMAIL", "COUNTRY", "AGE_RANGE", "FRIENDS_COUNT", "TYPE", "APP") := NULL])
+rf.base <- vegas[COUNTRY != "KR" & APP == "VEGAS" & TYPE == "GOLD"][order(UID, CREATE_DATE)]
+invisible(rf.base[, c("MAX_LEVEL", "LOGIN_DATE", "EMAIL", "AGE_RANGE", "FRIENDS_COUNT", "TYPE", "APP") := NULL])
 
 # Create date and provider filters
 rf.clean <- rf.base[CREATE_ACCOUNT >= "2016-10-26" & UID > 6200]
@@ -56,6 +56,12 @@ invisible(rf.clean[, DIFF := as.integer(difftime(CREATE_DATE, CREATE_ACCOUNT, un
 # Pick retention day FOR FINDING DAY 3 RETENTION SET TO <= 2
 rf.filtered.retention <- rf.clean
 rf.filtered <- rf.clean[DIFF == 0] # [DIFF == 0] SHOULD BE -1 day of what i want to check
+retention.check = "`1`"
+
+
+# User OS and COUNTRY
+rf.user.defaults <- rf.filtered[, .(UID, OS, COUNTRY)]
+rf.user.defaults <- unique(rf.user.defaults, by = "UID")
 
 # Facebook info
 rf.facebook.info <- rf.filtered[, .(UID, GENDER, PROVIDER)]
@@ -177,9 +183,9 @@ rf.filtered.retention1 <- dcast(rf.filtered.retention1, UID ~ DIFF, function(x) 
 ###### MERGE
 allmerged <- Reduce(function(x, y) merge(x, y, by = "UID", all.x = TRUE), list(rf.spins, rf.firstslot, rf.lastslot, rf.slotenters, 
                                                                                rf.level, rf.gold, rf.cheerup, rf.doubleup, rf.facebook.share, 
-                                                                               rf.collecthourly, rf.filtered.retention1, rf.facebook.info, 
-                                                                               rf.slotmostplayed, rf.spin.win.ratio, rf.spin.win.ratio.amount,
-                                                                               rf.event))
+                                                                               rf.collecthourly, rf.filtered.retention1, rf.facebook.info,
+                                                                               rf.user.defaults, rf.slotmostplayed, rf.spin.win.ratio,
+                                                                               rf.spin.win.ratio.amount, rf.event))
 
 ##### PREP FOR RF
 allmerged[is.na(allmerged)] <- 0
@@ -204,9 +210,7 @@ allmerged.factors$COLLECT.RANGES <- factor(allmerged$COLLECT.RANGES, levels = la
 ### Function
 
 rf.funct <- function(feature){
-  
-  retention.check = "`1`"
-  
+
   allmerged.factors <- allmerged.factors[, .N, c(retention.check, feature)]
   invisible(allmerged.factors[, PERCENT := paste0(100*round(N/sum(N),2), "%"), by = c(feature)])
   
@@ -219,17 +223,42 @@ rf.funct <- function(feature){
     geom_text(size = 3, vjust = 1.2, fontface = "bold") +
     facet_wrap(feature, scales = 'free')
 }
+
+rf.funct.duo <- function(predictor, feature){
+  
+  allmerged.factors <- allmerged.factors[, .N, c(predictor, feature)]
+  allmerged.factors[, PERCENT := paste0(100*round(N/sum(N),2), "%"), by = c(feature)]
+  
+  ggplot(allmerged.factors, aes_string(predictor, "N", fill = predictor, label = "PERCENT")) +
+    geom_bar(stat = 'identity', position = "dodge", color = "black") +
+    scale_fill_few() +
+    theme(legend.position = "none") +
+    xlab("") +
+    ylab("") +
+    geom_text(size = 3, vjust = 1.2, fontface = "bold") +
+    facet_wrap(feature, scales = 'free')
+}
+
 ```
 
 
 ```{r, echo = FALSE, message = FALSE, eval = FALSE}
-B2 <- Boruta(`1` ~ SPIN.RANGES + SLOTS_ENTERED + 
-               LEVEL.RANGES + GOLD.RANGES + FIRSTSLOT + LASTSLOT + COLLECT.RANGES + SPIN.WIN.RATIOS.RANGES + SPIN.WIN.AMOUNT.RANGES +
-               CHEERUP + DOUBLEUP + SHARE + GENDER + PROVIDER + MOSTPLAYEDSLOT + EVENT, allmerged.factors)
+B2 <- Boruta(GENDER ~ FIRSTSLOT + MOSTPLAYEDSLOT + OS + COUNTRY, allmerged.factors)
+getSelectedAttributes(B2)
 ```
  
 ```{r, echo = FALSE, eval = FALSE}
 plot(B2, cex.axis = .6, las = 2)
+```
+
+```{r, echo = FALSE, eval = FALSE}
+rf.funct.duo("GENDER", "OS")
+rf.funct.duo("GENDER", "FIRSTSLOT")
+rf.funct.duo("GENDER", "MOSTPLAYEDSLOT")
+rf.funct.duo("GENDER", "COUNTRY")
+rf.funct.duo("OS", "COUNTRY")
+rf.funct.duo("MOSTPLAYEDSLOT", "COUNTRY")
+
 ```
 
 ### Spin Ranges 
@@ -274,6 +303,18 @@ rf.funct("COLLECT.RANGES")
 rf.funct("SLOTS_ENTERED")
 ```
 
+### First played slot
+### 설치수 첫 슬롯 플레이   
+```{r, echo = FALSE}
+rf.funct("FIRSTSLOT")
+```
+
+### Most played slot
+### 마지막 슬롯 플레이    
+```{r, echo = FALSE}
+rf.funct("LASTSLOT")
+```
+
 ### Most played slot
 ### 가장 많이 스핀한 슬롯   
 ```{r, echo = FALSE}
@@ -315,3 +356,4 @@ rf.funct("PROVIDER")
 ```{r, echo = FALSE}
 rf.funct("GENDER")
 ```
+
