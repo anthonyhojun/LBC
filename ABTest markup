@@ -1,5 +1,5 @@
 ---
-title: "LBC Slots"
+title: "LBC Slots: `1` Day"
 output:
   html_document: default
   pdf_document: default
@@ -21,6 +21,7 @@ library(stringr)
 library(data.table)
 library(Hmisc)
 library(tidyr)
+library(ggExtra)
 
 ```
 
@@ -45,7 +46,7 @@ all <- rbindlist(lapply(all, read_csv))
 
 ```{r filters information}
 #New users start from 6256 for 20161026
-rf.clean <- all[APP == "VEGAS" & CREATE_ACCOUNT >= "2016-11-23" & UID > 6300
+rf.clean <- all[APP == "VEGAS" & CREATE_ACCOUNT >= "2016-11-24 11:13" & UID > 6300
              & COUNTRY != "KR" & TYPE == "GOLD"][order(UID, CREATE_DATE)] ##### Filter for marketing dates #####
 invisible(rf.clean[, c("MAX_LEVEL", "LOGIN_DATE", "EMAIL", "AGE_RANGE", "FRIENDS_COUNT", "APP") := NULL])
 ```
@@ -59,6 +60,7 @@ invisible(rf.clean[, CREATE_ACCOUNT := substr(CREATE_ACCOUNT, 1, 10)])
 invisible(rf.clean[, CREATE_DATE := substr(CREATE_DATE, 1, 10)])
 
 invisible(rf.clean[, DIFF := as.integer(difftime(CREATE_DATE, CREATE_ACCOUNT, units = "days"))])
+
 ```
 
 
@@ -89,7 +91,7 @@ graph.binary <- function(dat, xaxis, yaxis){
   xlab("") +
   ylab("") +
   geom_text(size = 3.5, vjust = -.6, fontface = "bold") +
-  scale_fill_gdocs() +
+  scale_fill_few() +
   theme(legend.position="none")
   }
 
@@ -136,6 +138,23 @@ graph.boxplot <- function(dat, yaxis){
   theme_gdocs() +
   scale_fill_few() +
   theme(legend.position="none")
+}
+
+# Graph for usage distribution 
+graph.function.usage <- function(feature){
+  
+fest <- vegas[CONTENT == "SHARE"][, .(GROUPBY, UID, CONTENT)]
+fest <- fest[, .N, by = .(GROUPBY, UID)]
+
+ggplot(fest, aes(GROUPBY, N, fill = GROUPBY)) +
+  geom_boxplot() +
+  geom_jitter(width = .3, height = .2) +
+  theme_gdocs() +
+  xlab("") +
+  ylab("") +
+scale_fill_few() +
+  theme(legend.position = "none")
+  
 }
 
 
@@ -208,9 +227,17 @@ setnames(rf.slotenters, "ID", "SLOTS_ENTERED")
 
 # Slot most played
 rf.slotmostplayed <- vegas[SUBCONTENT == "SPIN", .N, by = .(UID, SUBCONTENT, ID)]
-rf.slotmostplayed <- rf.slotmostplayed[order(UID, -N)]
-rf.slotmostplayed <- rf.slotmostplayed[, .SD[1], by = UID][,.(UID, ID)]
+rf.slotmostplayed <- rf.slotmostplayed[order(UID, -N)][, SUBCONTENT := NULL]
+rf.slotmostplayed <- rf.slotmostplayed[, .SD[1], by = .(UID)]
+invisible(rf.slotmostplayed[, lapply(.SD, sum), by = ID][, UID := NULL])
 setnames(rf.slotmostplayed, "ID", "MOSTPLAYEDSLOT")
+
+# Most popular slot
+rf.popularslot <- vegas[SUBCONTENT == "SPIN", .N, by = .(UID, ID)]
+rf.popularslot <- rf.popularslot[order(UID, -N)]
+rf.popularslot <- rf.popularslot[, .SD[1], by = UID][, N := NULL]
+setnames(rf.popularslot, "ID", "MOSTPOPULAR")
+
 
 ```
 
@@ -223,7 +250,7 @@ rf.events$SUBCONTENT[is.na(rf.events$SUBCONTENT)] <- "UNKNOWN"
 invisible(rf.events[, ':=' (NEWPLAYERBONUS = ifelse(CONTENT == "EVENT", 1, 0), 
                   CHEERUP = ifelse(CONTENT == "CHEERUP", 1, 0), 
                   DOUBLEUP = ifelse(SUBCONTENT == "DOUBLEUP", 1, 0), 
-                  SHARE = ifelse(CONTENT == "CHEERUP", 1, 0), 
+                  SHARE = ifelse(CONTENT == "SHARE", 1, 0), 
                   IAP = ifelse(CONTENT == "IAP", 1, 0)
                   )])
 
@@ -231,6 +258,7 @@ rf.events <- rf.events[NEWPLAYERBONUS == 1 | CHEERUP == 1 | DOUBLEUP == 1 | SHAR
 rf.events <- unique(rf.events, by = c("UID", "NEWPLAYERBONUS", "CHEERUP", "DOUBLEUP", "SHARE", "IAP"))
 invisible(rf.events[, c("CONTENT", "SUBCONTENT") := NULL])
 
+rf.events <- rf.events[, lapply(.SD, sum), by = UID, .SDcols = 2:6]
 ```
 
 ```{r Retention cast, error = FALSE, message = FALSE}
@@ -246,7 +274,8 @@ retention.integers <- retention
 ```{r Merge and 0s}
 #Merging
 allmerged <- Reduce(function(x, y) merge(x, y, by = "UID", all.x = TRUE), list(rf.spins, rf.level, rf.collecthourly, rf.firstslot, rf.lastslot,   
-                                                                               rf.slotenters, rf.slotmostplayed, rf.events, rf.gold, retention))
+                                                                               rf.slotenters, rf.slotmostplayed, rf.events, rf.gold, 
+                                                                               rf.popularslot, retention))
 
 allmerged[is.na(allmerged)] <- 0
 ```
@@ -268,13 +297,14 @@ allmerged.factored$GOLD.RANGES <- factor(allmerged.factored$GOLD.RANGES, levels 
 # Graph for 0/1 and A/B
 graph.function.AB.retention <- function(predictor, feature){
 test <- allmerged.factored[, .N, by = c("GROUPBY", predictor, feature)]
-test[, PERCENT := paste0(100*round(N/sum(N),2), "%"), by = c(feature, "GROUPBY")]
+test[, TOTAL := 100*round(N/sum(N),2), by = c(feature, "GROUPBY")]
+test[, PERCENT := paste0(TOTAL, "%")]
   
-  ggplot(test, aes_string(predictor, "N", fill = predictor, label = "PERCENT")) +
+  ggplot(test, aes_string(predictor, "TOTAL", fill = predictor, label = "PERCENT")) +
     geom_bar(stat = 'identity', position = "dodge", color = "black") +
     scale_fill_few() +
-    theme_gdocs() + 
-    theme(legend.position = "none") +
+    theme_gdocs() +  
+    theme(legend.position = "none", axis.text.y = element_blank()) +
     xlab("") +
     ylab("") +
     geom_text(size = 3, vjust = 1.2, fontface = "bold") +
@@ -299,10 +329,6 @@ best[, PERCENT := paste0(100*round(N/sum(N),2), "%"), by = c("GROUPBY")]
     facet_grid(paste0("GROUPBY", "~", predictor), scales = 'free', space = 'free')
 }
 
-graph.function.AB("FIRSTSLOT")
-
-
-graph.function.AB.retention("`1`", "SPIN.RANGES")
 
 # Graph for FEATURES = YES and A/B
 graph.function.1.returns <- function(predictor, feature){
@@ -323,16 +349,10 @@ rest <- rest[get(feature) == 1]
     facet_wrap(~GROUPBY, scales = 'free')
 }
 
-#graph.function.AB.retention("`1`", "DOUBLEUP")
-#graph.function.1.returns("`1`", "DOUBLEUP")
-
-# % of people 
-# % of uses per person
-
 
 ```
 
-> ### **RETENTION** 
+> ### **`1` DAY RETENTION** 
 
 ***
 
@@ -343,7 +363,7 @@ invisible(retention.graph[, PERCENT := paste0(`1`, "%")])
 ggplot(retention.graph, aes(GROUP, `1`, fill = GROUP, label = PERCENT)) +
   geom_bar(stat = "identity", color = "black") +
   scale_fill_few() +
-  theme_few() + 
+  theme_gdocs() + 
   theme(legend.position = "none") +
   xlab("") +
   ylab("") +
@@ -351,52 +371,67 @@ ggplot(retention.graph, aes(GROUP, `1`, fill = GROUP, label = PERCENT)) +
 
 ```
 
-> ### **Progression**
+> ### **PROGRESSION**
 
 ***
 
-##### **SPIN.RANGES**
+#### **SPIN RANGES**
+#### **스핀 범위**
+
 ```{r data checks}
 graph.function.AB("SPIN.RANGES")
 graph.function.AB.retention("`1`", "SPIN.RANGES")
 ```
 
-##### **LEVEL RANGES**
+#### **LEVEL RANGES**
+#### **레벨 범위**
 ```{r}
 graph.function.AB("LEVEL.RANGES")
 graph.function.AB.retention("`1`", "LEVEL.RANGES")
 ```
 
-##### **GOLD RANGES**
+#### **GOLD RANGES**
+#### **골드 범위**
 ```{r}
 graph.function.AB("SPIN.RANGES")
 graph.function.AB.retention("`1`", "GOLD.RANGES")
 ```
 
 
-##### **COLLECT RANGES**
+#### **COLLECT RANGES**
+#### **COLLECT 범위**
 ```{r}
 graph.function.AB("COLLECT.RANGES")
 graph.function.AB.retention("`1`", "COLLECT.RANGES")
 ```
 
 
-> ### **Slots**
+> ### **SLOTS**
 ***
 
-##### **FIRST SLOT**
+#### **FIRST SLOT**
+#### **첫 슬롯 입장**
 ```{r}
 graph.function.AB("FIRSTSLOT")
 graph.function.AB.retention("`1`", "FIRSTSLOT")
 ```
 
-##### **MOST PLAYED SLOT**
+#### **MOST PLAYED SLOT BY SPIN COUNT**
+#### **스핀 횟수 분포**
 ```{r}
 graph.function.AB("MOSTPLAYEDSLOT")
-graph.function.AB.retention("`1`", "MOSTPLAYEDSLOT")
 ```
 
-##### **SLOTS ENTERED**
+#### **MOST POPULAR SLOT**
+#### **인기 슬롯 (각 유저가 가장 많이하느 슬롯 합계) **
+```{r}
+graph.function.AB("MOSTPOPULAR")
+graph.function.AB.retention("`1`", "MOSTPOPULAR")
+```
+
+
+#### **SLOTS ENTERED**
+#### **슬롯 입장 개수**
 ```{r}
 graph.function.AB("SLOTS_ENTERED")
 graph.function.AB.retention("`1`", "SLOTS_ENTERED")
@@ -405,7 +440,8 @@ graph.function.AB.retention("`1`", "SLOTS_ENTERED")
 > ### **Features**
 ***
 
-##### **NEW PLAYER BONUS**
+#### **NEW PLAYER BONUS**
+#### **신규 유저 보너스**
 ```{r}
 #graph.function.AB.retention("`1`", "NEWPLAYERBONUS")
 graph.function.AB("NEWPLAYERBONUS")
@@ -413,437 +449,57 @@ graph.function.1.returns("`1`", "NEWPLAYERBONUS")
 
 ```
 
-##### **CHEERUP**
+#### **CHEERUP**
 ```{r}
 graph.function.AB("CHEERUP")
 graph.function.1.returns("`1`", "CHEERUP")
 ```
 
-##### **DOUBLEUP**
+#### **DOUBLEUP**
 ```{r}
 graph.function.AB("DOUBLEUP")
 graph.function.1.returns("`1`", "DOUBLEUP")
-
+graph.function.usage("DOUBLEUP")
 ```
 
-##### **SHARE**
+#### **FACEBOOK SHARE**
 ```{r}
 #graph.function.AB.retention("`1`", "SHARE")
 graph.function.AB("SHARE")
 graph.function.1.returns("`1`", "SHARE")
-
+graph.function.usage("SHARE")
 ```
 
+> ### **ABANDONMENT**
+*** 
 
-> ### **Feature details**
-
- 
-##### **Abandoning users level spread**
-##### 이탈한 유저 레벨 분포 (3일 이상 접속하지 않은 유저)
-```{r Abandon level spread}
-# abandoning.users <- vegas[, .SD[.N], by = UID]
-# invisible(abandoning.users[, ABANDONED := as.integer(difftime(Sys.Date(), LOGIN_DATE, units = "days"))])
-# 
-# abandoning.users.subset <- abandoning.users[ABANDONED > 3]
-# 
-# abandoning.users.subset.median <- abandoning.users.subset[, as.double(lapply(.SD, median)), by = GROUPBY, .SDcols = "MAX_LEVEL"][]
-# 
-# graph.boxplot("abandoning.users.subset", "MAX_LEVEL") +
-#   geom_text(data = abandoning.users.subset.median, aes(GROUPBY, V1, label = V1), hjust = 15.3) +
-#   geom_jitter(width = .5, height = .5)
-
-```
-
-
+#### **LEVEL**
+#### **`1`일에 접속하지 않은 유저 x 레벨**
 ```{r}
-# WHat are users doing right before they leave? 
-# last.action.abandoned <-vegas[, .SD[.N], by = .(GROUPBY, UID)]
-# invisible(last.action.abandoned[, ABANDONED := as.integer(difftime(Sys.Date(), LOGIN_DATE, units = "days"))])
-# last.action.abandoned <- last.action.abandoned[ABANDONED >= 3, .(UID, GROUPBY, CONTENT, SUBCONTENT, GROUPBY)]
-# last.action.abandoned.summary <- last.action.abandoned[, .N, by = .(GROUPBY, CONTENT, SUBCONTENT)]
-# 
-# invisible(percentage.func("last.action.abandoned.summary", "N"))
-# last.action.abandoned.summary <- unite(last.action.abandoned.summary, COMBINED, CONTENT, SUBCONTENT)
-# 
-# ggplot(last.action.abandoned.summary, aes(reorder(COMBINED, N), N, label = Percent)) +
-#   geom_bar(stat = "identity", color = "black", fill = "light blue") +
-#   coord_flip() +
-#   theme_few() +
-#   xlab("") +
-#   ylab("") +
-#   facet_wrap(~GROUPBY) +
-#   geom_text(hjust = -.3, size = 3)
-# 
-# ```
+abandoned.level <- allmerged[`1` == 0, .(UID, GROUPBY, LEVEL)]
+abandoned.level <- unique(abandoned.level, by = "UID")
 
-##### **Median gold for abandoned users x level**
-##### 이탈한 유저 레벨 별 중앙 골드 
-```
+ggplot(abandoned.level, aes(GROUPBY, LEVEL, fill = GROUPBY)) +
+  geom_boxplot() +
+  geom_jitter(width = .3, height = .2) +
+  theme_gdocs() +
+  xlab("") +
+  ylab("") +
+  scale_fill_few() +
+  theme(legend.position = "none")
 
-```{r Gold average where users are leaving, message = FALSE, warning = FALSE}
-# abandon.median.gold <- vegas[CONTENT == "LEVELUP" & TYPE == "GOLD"]
-# invisible(abandon.median.gold[, ABANDONED := as.integer(difftime(Sys.Date(), LOGIN_DATE, units = "days"))])
-# abandon.median.gold <- abandon.median.gold[ABANDONED >= 3, .(UID, CNT_CURRENT, MAX_LEVEL, GROUPBY)]
-# abandon.median.gold <- abandon.median.gold[MAX_LEVEL <= 10]
-# abandon.median.gold <- abandon.median.gold[, .SD[.N], by = UID]
-# abandon.median.gold$MAX_LEVEL <- as.factor(abandon.median.gold$MAX_LEVEL)
-# 
-# abandon.median.gold.percent <- abandon.median.gold[, MEDIAN := as.double(median(CNT_CURRENT)), by = .(GROUPBY, MAX_LEVEL)]
-# abandon.median.gold.percent <- unique(abandon.median.gold.percent, by = c("GROUPBY", "MAX_LEVEL"))
-# 
-# ggplot(abandon.median.gold, aes(MAX_LEVEL, CNT_CURRENT, group = MAX_LEVEL)) +
-#   geom_boxplot(fill = "light blue") +
-#   ylab("Gold") +
-#   xlab("Level") +
-#   theme_gdocs() +
-#   theme(legend.position="none") +
-#   ylim(0, quantile(abandon.median.gold$CNT_CURRENT, .95)) +
-#   geom_text(data = abandon.median.gold.percent, aes(MAX_LEVEL, MEDIAN, label = MEDIAN), size = 2.3, vjust = -1, fontface = "bold") +
-#   facet_grid(~GROUPBY) +
-#   geom_jitter(width = .5)
-# 
-# 
+abandoned.level.summary <- abandoned.level[, .N, by = .(GROUPBY, LEVEL)]
 
-```
+ggplot(abandoned.level.summary, aes(LEVEL, N, fill = GROUPBY)) +
+  geom_bar(stat = "identity", color = "black") +
+  theme_gdocs() +
+  xlab("") +
+  ylab("") +
+  scale_fill_few() +
+  theme(legend.position = "none") +
+  facet_wrap(~GROUPBY)
 
-
-<!-- ##### **Gold earn medians per level ** -->
-<!-- ##### 중앙 골드 획득 x 레벨  -->
-<!-- ```{r, warning = FALSE, error=FALSE} -->
-<!-- gold.drops <- vegas[CONTENT == "LEVELUP" & TYPE == "GOLD", .(UID, GROUPBY, ID, CNT_CURRENT)] -->
-<!-- invisible(gold.drops[, DIFFERENCE := CNT_CURRENT - lag(CNT_CURRENT), by = .(GROUPBY, UID)]) -->
-<!-- gold.drops <- na.omit(gold.drops) -->
-<!-- gold.drops$ID <- as.integer(gold.drops$ID) -->
-<!-- gold.drops <- gold.drops[ID < 11] -->
-<!-- gold.drops$ID <- as.factor(gold.drops$ID) -->
-
-<!-- invisible(gold.drops.median <- gold.drops[, MEDIAN := as.double(median(DIFFERENCE)), by = .(GROUPBY, ID)]) -->
-
-<!-- ggplot(gold.drops, aes(ID, DIFFERENCE), group = ID, fill = ID) + -->
-<!--   geom_boxplot(outlier.shape = NA) + -->
-<!--   ylim(-75000, quantile(gold.drops$DIFFERENCE, .95)) + -->
-<!--   geom_text(data = gold.drops.median, aes(ID, MEDIAN, label = MEDIAN), size = 2.5, vjust = -1) + -->
-<!--   facet_wrap(~GROUPBY) + -->
-<!--   scale_fill_few() +  -->
-<!--   theme_gdocs() + -->
-<!--   geom_jitter(width = .5, alpha = .3) -->
-<!-- ``` -->
-
-
-> ### **Gems**
-
-***
-
-##### **Count of Gems used**
-##### Gem 사용 횟수
-```{r Gem usage distribution}
-# gem.usage <- vegas[TYPE == "GEM" & CONTENT != "LEVELUP", .(UID, MAX_LEVEL, CONTENT, SUBCONTENT, ID, CNT_CURRENT, GROUPBY)]
-# gem.usage.filter <- gem.usage[SUBCONTENT == "GEMSPIN" | CONTENT == "DOUBLEUP"]
-# gem.usage.filter.summary <- gem.usage.filter[, .N, by = c("GROUPBY", "CONTENT")]
-# invisible(percentage.func("gem.usage.filter.summary", "N"))
-# 
-# invisible(gem.usage.filter.summary[order(GROUPBY, CONTENT)])
-# 
-# graph.binary("gem.usage.filter.summary", "CONTENT", "N")
-```
-
-##### **Amount of Gems used**
-##### Gem 사용 총 금액
-```{r Amount of total Gems used }
-# gem.amount.usage <- vegas[TYPE == "GEM" & APP == "VEGAS"]
-# gem.amount.usage <- gem.amount.usage[CNT_USE > 0, .(CONTENT, CNT_USE, GROUPBY)]
-# gem.amount.usage.amount <- gem.amount.usage[, lapply(.SD, sum), by = c("GROUPBY", "CONTENT")]
-# invisible(percentage.func("gem.amount.usage.amount", "CNT_USE"))
-# 
-# invisible(gem.amount.usage.amount[order(GROUPBY)])
-# 
-# graph.binary("gem.amount.usage.amount", "CONTENT", "CNT_USE")
-```
-
-> ### **Doubleup**
-
-***
-
-##### **Doubleup user count**
-##### Doubleup 사용한 유니크 유저 수 (Doubleup 클릭, Gem 사용 제외)
-```{r Doubleup users}
-# double.up <- vegas[, DOUBLEUP := ifelse(SUBCONTENT == "DOUBLEUP", 1, 0)]
-# double.up <- na.omit(double.up)
-# double.up.unique <- unique(double.up, by = c("GROUPBY", "UID", "DOUBLEUP"))
-# double.up.unique.summary <- double.up.unique[, .N, by = c("GROUPBY", "DOUBLEUP")]
-# invisible(percentage.func("double.up.unique.summary", "N"))
-# double.up.unique.summary$DOUBLEUP <- as.factor(double.up.unique.summary$DOUBLEUP)
-# 
-# invisible(double.up.unique.summary[order(GROUPBY)])
-# 
-# graph.binary("double.up.unique.summary", "DOUBLEUP", "N") +
-#   facet_wrap(~GROUPBY, scales = "free")
-```
-
-##### **Doubleup distribution**
-##### Doubleup 사용 횟수 분포 (95% quantile)
-```{r Doubleup distribution, warning = FALSE}
-# double.up.dist <- vegas[SUBCONTENT == "DOUBLEUP", .(UID, CONTENT, GROUPBY)]
-# double.up.dist.summary <- double.up.dist[, .N, by = c("GROUPBY", "UID")]
-# 
-# double.up.dist.summary.median <- double.up.dist.summary[, as.integer(lapply(.SD, median)), by = GROUPBY, .SDcols = "N"]
-# 
-# graph.boxplot("double.up.dist.summary", "N") +
-#   geom_text(data = double.up.dist.summary.median, aes(GROUPBY, V1, label = V1), hjust = 17.3, size = 3.5) +
-#   ylim(0, quantile(double.up.dist.summary$N, .95)) +
-#   geom_jitter(width = .5, height = .5) +
-#   facet_wrap(~GROUPBY, scales = "free")
-#graph.distribution("double.up.dist.summary", "N", "Doubleup")
-```
-
-
-> ### **Cheerup**
-
-***
-
-##### **Percent of users with at least 1 cheerup**
-##### Cheerup 사용한 유니크 유저 수
-```{r Cheerup usage overall by user}
-# cheerup.cnt <- vegas
-# cheerup.cnt <- cheerup.cnt[, ':=' (CHEERUP_YS = ifelse(CHEERUP_CNT >= 1, 1, 0))]
-# cheerup.cnt <- cheerup.cnt[order(UID, CHEERUP_CNT)]
-# cheerup.cnt.first <- cheerup.cnt[, .SD[1], by = UID]
-# cheerup.cnt.first.summary <- cheerup.cnt.first[, .N, by = c("GROUPBY", "CHEERUP_YS")]
-# invisible(percentage.func("cheerup.cnt.first.summary", "N"))
-# cheerup.cnt.first.summary$CHEERUP_YS <- as.factor(cheerup.cnt.first.summary$CHEERUP_YS)
-# 
-# invisible(cheerup.cnt.first.summary[order(GROUPBY)])
-# 
-# 
-# graph.binary("cheerup.cnt.first.summary", "CHEERUP_YS", "N") +
-#   facet_wrap(~GROUPBY, scales = "free")
-```
-
-##### **Cheerup distribution**
-##### Cheerup 분포 (유니크 유저 수)
-```{r}
-# cheerup.cnt.unique <- unique(vegas, by = c("UID", "CHEERUP_CNT"))
-# cheerup.cnt.unique <- cheerup.cnt.unique[CHEERUP_CNT >= 1]
-# cheerup.cnt.unique.summary <- cheerup.cnt.unique[, .N, by = c("GROUPBY", "CHEERUP_CNT")]
-# invisible(percentage.func("cheerup.cnt.unique.summary", "N"))
-# cheerup.cnt.unique.summary$CHEERUP_CNT <- as.factor(cheerup.cnt.unique.summary$CHEERUP_CNT)
-# 
-# ggplot(cheerup.cnt.unique.summary, aes(CHEERUP_CNT, N, label = Percent)) +
-#   geom_bar(stat = "identity", color = "black", fill = "light blue") +
-#   theme_few() +
-#   xlab("") +
-#   ylab("") +
-#   geom_text(size = 3.5, vjust = -.6, fontface = "bold") +
-#   facet_wrap(~GROUPBY, scales = "free")
-
-```
-
-##### **Gold amount when users get cheer up**
-##### Cheerup x 중앙 골드 보유 
-```{r}
-# WHERE ARE USERS getting cheerup
-# cheerup.gold.range <- vegas[CONTENT == "CHEERUP", .(UID, GROUPBY, CNT_USE, CNT_CURRENT)]
-# invisible(cheerup.gold.range[, CNT_CURRENT := CNT_CURRENT + CNT_USE][, c("UID", "CNT_USE") := NULL])
-# 
-# graph.boxplot("cheerup.gold.range", "CNT_CURRENT")  +
-#   geom_jitter(width = .5) +
-#   facet_wrap(~GROUPBY, scales = "free")
+  
 ```
 
  
-> ### **Social**
-
-***
-
-##### **Percent of Facebook users sharing**
-##### Facebook connect 상태에서 Share 하는 유니크 유저 수
-```{r}
-# facebook.shares.count <- vegas[PROVIDER == "FACEBOOK", .(GROUPBY, UID, CONTENT)]
-# invisible(facebook.shares.count[, FBSHARE := ifelse(CONTENT == "SHARE", 1, 0)])
-# facebook.shares.count <- facebook.shares.count[order(UID, -FBSHARE)]
-# facebook.shares.count <- facebook.shares.count[, .SD[1], by = UID]
-# facebook.shares.summary <- facebook.shares.count[, .N, by = c("GROUPBY", "FBSHARE")]
-# invisible(percentage.func("facebook.shares.summary", "N"))
-# facebook.shares.summary$FBSHARE <- as.factor(facebook.shares.summary$FBSHARE)
-# 
-# invisible(facebook.shares.summary[order(GROUPBY, FBSHARE)])
-# 
-# graph.binary("facebook.shares.summary", "FBSHARE", "N") +
-#   facet_wrap(~GROUPBY, scales = "free")
-```
-
-
-##### **Share distribution**  
-##### 중앙 Share 횟수 분포 (각 유저 몇번 share 하는지)
-```{r, warning = FALSE}
-# facebook.shares.distribution <- vegas[CONTENT == "SHARE", .(GROUPBY, UID, CONTENT)]
-# facebook.shares.distribution <- facebook.shares.distribution[, .N, by = c("GROUPBY", "UID")]
-# 
-# # get medians
-# facebook.shares.distribution.median <- facebook.shares.distribution[, as.double(lapply(.SD, median)), by = GROUPBY, .SDcols = "N"]
-#   
-# graph.boxplot("facebook.shares.distribution", "N") +
-#   geom_text(data = facebook.shares.distribution.median, aes(GROUPBY, V1, label = V1), hjust = 17.3, size = 3.5) +
-#   ylim(0, quantile(facebook.shares.distribution$N, .9)) +
-#   geom_jitter(width = .5, height = .4) +
-#   facet_wrap(~GROUPBY, scales = "free")
-
-```
-
-```{r, eval = FALSE}
-##### **IAP**  
-##### ê²°ì   
-
-# gem.usage <- vegas[CONTENT == "IAP", .(UID, MAX_LEVEL, CNT_CURRENT, GROUPBY)]
-# gem.usage.summary <- gem.usage[, .N, by = c("GROUPBY", "UID")]
-# 
-# invisible(gem.usage.summary[order(GROUPBY)])
-# 
-# graph.binary("gem.usage.summary", "CONTENT", "N")
-```
-
-
-<!-- > ### **Slot graphs** -->
-
-<!-- *** -->
-
-<!-- ##### **Slot spins by UID x Slot** -->
-<!-- ##### ì ì , ì¬ë¡¯ ë³ ì¤í (ì ì  x ì¬ë¡¯ ë³ RP% í¨í´)   -->
-<!-- ```{r Spins by user} -->
-<!-- slot.graph <- vegas[TYPE == "GOLD" & SUBCONTENT == "SPIN", .(UID, CREATE_DATE, ID, CNT_CURRENT)] -->
-<!-- slot.graph.rank <- slot.graph[, ':=' (RANK = frank(CREATE_DATE, ties.method = "first")), by = UID][, CREATE_DATE := NULL] -->
-
-<!-- #createfiltersforslots -->
-<!-- slot.graph.rank.filtered <- slot.graph.rank[RANK < 1000] -->
-<!-- slot.graph.rank.filtered$CUTS <- cut2(slot.graph.rank.filtered$UID, g = 9) -->
-<!-- slot.graph.rank.filtered <- slot.graph.rank.filtered[, ':=' (GROUPS = frank(CUTS, ties.method = "dense"))] -->
-
-<!-- ggplot(slot.graph.rank.filtered, aes(RANK, CNT_CURRENT, color = ID, group = UID)) + -->
-<!--   geom_line(stat = "identity") + -->
-<!--   scale_y_log10(labels = comma) + -->
-<!--   facet_wrap(~GROUPS, scales = "free") + -->
-<!--   xlab("") + -->
-<!--   ylab("") -->
-<!-- ``` -->
-
-<!-- ##### **Slot spins by UID, group 1** -->
-<!-- ##### ì ì , ì¬ë¡¯ ë³ ì¤í, ê·¸ë£¹ 1  -->
-<!-- ```{r} -->
-<!-- ggplot(subset(slot.graph.rank.filtered, GROUPS == 1), aes(RANK, CNT_CURRENT, color = ID, group = UID)) + -->
-<!--   geom_line(stat = "identity") + -->
-<!--   scale_y_log10(labels = comma) + -->
-<!--   xlab("") + -->
-<!--   ylab("") -->
-
-<!-- ``` -->
-
-<!-- ##### **Slot spins by UID, group 2** -->
-<!-- ##### ì ì , ì¬ë¡¯ ë³ ì¤í, ê·¸ë£¹  2 -->
-<!-- ```{r} -->
-<!-- ggplot(subset(slot.graph.rank.filtered, GROUPS == 2), aes(RANK, CNT_CURRENT, color = ID, group = UID)) + -->
-<!--   geom_line(stat = "identity") + -->
-<!--   scale_y_log10(labels = comma) + -->
-<!--   xlab("") + -->
-<!--   ylab("") -->
-
-<!-- ``` -->
-
-<!-- ##### **Slot spins by UID, group 3** -->
-<!-- ##### ì ì , ì¬ë¡¯ ë³ ì¤í, ê·¸ë£¹ 3    -->
-<!-- ```{r} -->
-<!-- ggplot(subset(slot.graph.rank.filtered, GROUPS == 3), aes(RANK, CNT_CURRENT, color = ID, group = UID)) + -->
-<!--   geom_line(stat = "identity") + -->
-<!--   scale_y_log10(labels = comma) + -->
-<!--   xlab("") + -->
-<!--   ylab("") -->
-
-<!-- ``` -->
-
-<!-- ##### **Slot spins by UID, group 4** -->
-<!-- ##### ì ì , ì¬ë¡¯ ë³ ì¤í, ê·¸ë£¹ 4    -->
-<!-- ```{r} -->
-<!-- ggplot(subset(slot.graph.rank.filtered, GROUPS == 4), aes(RANK, CNT_CURRENT, color = ID, group = UID)) + -->
-<!--   geom_line(stat = "identity") + -->
-<!--   scale_y_log10(labels = comma) + -->
-<!--   xlab("") + -->
-<!--   ylab("") -->
-
-<!-- ``` -->
-
-```{r comparing AB on one graph dodged, eval = FALSE}
-## TEST median spins per user
-# spins.pu <- vegas[SUBCONTENT == "SPIN"]
-# spins.pu.summary <- spins.pu[, .N, by = c("UID", "GROUPBY")]
-# 
-# ggplot(spins.pu.summary, aes(GROUPBY, N, fill = GROUPBY, label = N)) +
-#   geom_boxplot() +
-#   scale_y_log10() +
-#   theme_few() +
-#   scale_fill_few() +
-#   theme(legend.position="none") +
-#   ylab("spins log10") +
-#   xlab("")
-```
-
-```{r TESTING total spins per user based on how many total slots they have played, eval = FALSE}
-# slots.avg <- vegas[SUBCONTENT == "SPIN", .(SLOTS.PLAYED = uniqueN(ID)), by = UID]
-# slots.avg.merged <- merge(vegas, slots.avg, by = "UID", all.x = TRUE)
-# 
-# slots.avg.merged.summary <- slots.avg.merged[SUBCONTENT == "SPIN", .N, by = c("GROUPBY",  "ID", "SLOTS.PLAYED")][order(SLOTS.PLAYED, ID)]
-# slots.avg.merged.summary.percent <- slots.avg.merged.summary[, Percent := paste0(100 * round(N / sum(N), 2), "%"), by = c("GROUPBY", "SLOTS.PLAYED")][]
-# 
-# ggplot(slots.avg.merged.summary.percent, aes(ID, N, label = Percent, fill = ID)) +
-#   geom_bar(stat = "identity", color = "black") +
-#   theme_few() +
-#   xlab("") +
-#   ylab("") +
-#   geom_text(size = 3.5, vjust = -.18, fontface = "bold") +
-#   scale_fill_few() +
-#   theme(legend.position="none") +
-#   facet_wrap(SLOTS.PLAYED~GROUPBY, scales = "free")
-```
- 
-```{r, eval = FALSE}
-# tes <- rf.bind[, .(UID, COUNTRY, CREATE_ACCOUNT, CREATE_DATE)]
-# tes <- tes[COUNTRY != "KR" & UID > 6300 & CREATE_ACCOUNT >= "2016-10-26"]
-# tes[, CREATE_ACCOUNT := substr(CREATE_ACCOUNT, 1, 10)]
-# tes[, CREATE_DATE := substr(CREATE_DATE, 1, 10)]
-# tes[, DIFFERENCE := as.integer(difftime(CREATE_DATE, CREATE_ACCOUNT, unit = "days"))]
-
-# au <- unique(tes, by = c("UID", "DIFFERENCE"))
-# au <- au[order(UID)]
-# 
-# #au <- tes[COUNTRY == "AU"]
-# au[, CREATE_DATE := NULL]
-# 
-# au.cast <- dcast(au, UID + CREATE_ACCOUNT + COUNTRY ~ DIFFERENCE, function(x) 1, fill = 0)
-# 
-# au.cast <- au.cast[, lapply(.SD, function(x) (100 * round(sum(x)/length(x), 2))),by = COUNTRY, .SDcols = 4:15]
-# 
-# write.csv(au.cast, "retentionbycountry.csv")
-```
-
-
-```{r bar positive and negative }
-# test <- allmerged[, .N, by = .(GROUPBY, SPIN.RANGES)]
-# test[, PERCENT := 100*round(N/sum(N),2), by = .(GROUPBY)]
-# test <- test[order(SPIN.RANGES, GROUPBY)]
-# test$PERCENT <- as.integer(test$PERCENT)
-# 
-# 
-# test[, DIFFERENCE := PERCENT[1] - PERCENT[2], by = SPIN.RANGES]
-# test[, NUMBER := ifelse(DIFFERENCE > 0, "POSITIVE", "NEGATIVE")]
-# test <- unique(test, by = "SPIN.RANGES")
-# 
-# ggplot(test, aes(SPIN.RANGES, DIFFERENCE, label = DIFFERENCE, fill = NUMBER)) +
-#   geom_bar(stat = "identity", color = "black") +
-#   theme_few() +
-#   xlab("") +
-#   ylab("") +
-#   geom_text(size = 3.5, vjust = -.6, fontface = "bold") +
-#   scale_fill_few() +
-#   theme(legend.position="none")
-
-```
-
-
