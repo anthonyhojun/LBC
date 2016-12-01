@@ -140,10 +140,10 @@ graph.boxplot <- function(dat, yaxis){
   theme(legend.position="none")
 }
 
-# Graph for usage distribution 
-graph.function.usage <- function(feature){
-  
-fest <- vegas[CONTENT == "SHARE"][, .(GROUPBY, UID, CONTENT)]
+#Graph for usage distribution
+graph.function.usage.content.AB <- function(feature){
+
+fest <- vegas[CONTENT == feature][, .(GROUPBY, UID, CONTENT)]
 fest <- fest[, .N, by = .(GROUPBY, UID)]
 
 ggplot(fest, aes(GROUPBY, N, fill = GROUPBY)) +
@@ -154,9 +154,24 @@ ggplot(fest, aes(GROUPBY, N, fill = GROUPBY)) +
   ylab("") +
 scale_fill_few() +
   theme(legend.position = "none")
-  
+
 }
 
+######
+graph.function.usage.content.AB.ONE <- function(feature){
+
+fest <- vegas[CONTENT == feature][, .(UID, CONTENT)]
+fest <- fest[, .N, by = .(UID)]
+
+ggplot(fest, aes(x = feature, N, fill = feature)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = .3, height = .2) +
+  theme_gdocs() +
+  xlab("") +
+  ylab("") +
+  scale_fill_few() +
+  theme(legend.position = "none")
+}
 
 
 ```
@@ -172,6 +187,7 @@ labels.spins = c("0-99", "100-249", "250-499", "500-999", "1,000-2,499", "2,500-
 
 invisible(rf.spins[, SPIN.RANGES := as.character(cut(SPINS, breaks = cuts.spins, labels = labels.spins, right = FALSE))])
 
+rf.spins.median <- vegas[SUBCONTENT == "SPIN", .N, by = .(UID, GROUPBY)]
 ```
 
 ```{r Level first day}
@@ -184,6 +200,12 @@ labels.levels = c("0-4", "5-9", "10-14", "15-19", "20-49", "50-100")
 labels.levels2 = c("0", "0-4", "5-9", "10-14", "15-19", "20-49", "50-100")
 
 invisible(rf.level[, LEVEL.RANGES := as.character(cut(LEVEL, breaks = cuts.levels, labels = labels.levels, right = FALSE, dig.lab = 0))])
+
+rf.levelranges.median <-  vegas[CONTENT == "LEVELUP", .(UID, GROUPBY, ID)]
+rf.levelranges.median$ID <- as.integer(rf.levelranges.median$ID)
+rf.levelranges.median <- rf.levelranges.median[order(UID, -ID)]
+rf.levelranges.median <- rf.levelranges.median[, .SD[1], by = .(UID, GROUPBY)]
+setnames(rf.levelranges.median, "ID", "N")
 ```
 
 ```{r}
@@ -196,6 +218,8 @@ labels.collecthourly = c("0-1", "2-4", "5-9", "10-24", "25-49","50-99", "100-500
 labels.collecthourly2 = c("0", "0-1", "2-4", "5-9", "10-24", "25-49","50-99", "100-500")
 
 invisible(rf.collecthourly[, COLLECT.RANGES := as.character(cut(COLLECTHRLY, breaks = cuts.collecthourly, labels = labels.collecthourly, right = FALSE))])
+
+rf.collecthourly.median <- vegas[CONTENT == "COLLECT", .N, by = .(UID, GROUPBY)]
 ```
 
 ```{r}
@@ -207,6 +231,10 @@ labels.gold = c("0-49,999", "50,000-99,999", "100,000-249,999", "250,000-499,999
 labels.gold2 = c("0", "0-49,999", "50,000-99,999", "100,000-249,999", "250,000-499,999", "500,000-999,999", 
                 "1,000,000-9,999,999", "10,000,000-100,000,000")
 invisible(rf.gold[, GOLD.RANGES := as.character(cut(CNT_CURRENT, breaks = cuts.gold, labels = labels.gold, right = FALSE))])
+
+rf.gold.median <-  vegas[, .(UID, GROUPBY, CNT_CURRENT)]
+rf.gold.median <- rf.gold.median[, .SD[.N], by = .(UID, GROUPBY)]
+setnames(rf.gold.median, "CNT_CURRENT", "N")
 ```
 
 
@@ -226,10 +254,9 @@ rf.slotenters <- vegas[SUBCONTENT == "SPIN", lapply(.SD, uniqueN), by = .(UID, C
 setnames(rf.slotenters, "ID", "SLOTS_ENTERED")
 
 # Slot most played
-rf.slotmostplayed <- vegas[SUBCONTENT == "SPIN", .N, by = .(UID, SUBCONTENT, ID)]
-rf.slotmostplayed <- rf.slotmostplayed[order(UID, -N)][, SUBCONTENT := NULL]
-rf.slotmostplayed <- rf.slotmostplayed[, .SD[1], by = .(UID)]
-invisible(rf.slotmostplayed[, lapply(.SD, sum), by = ID][, UID := NULL])
+rf.slotmostplayed <- vegas[SUBCONTENT == "SPIN", .(UID, SUBCONTENT, ID)]
+rf.slotmostplayed <- rf.slotmostplayed[, .N, by = ID]
+
 setnames(rf.slotmostplayed, "ID", "MOSTPLAYEDSLOT")
 
 # Most popular slot
@@ -274,7 +301,7 @@ retention.integers <- retention
 ```{r Merge and 0s}
 #Merging
 allmerged <- Reduce(function(x, y) merge(x, y, by = "UID", all.x = TRUE), list(rf.spins, rf.level, rf.collecthourly, rf.firstslot, rf.lastslot,   
-                                                                               rf.slotenters, rf.slotmostplayed, rf.events, rf.gold, 
+                                                                               rf.slotenters, rf.events, rf.gold, 
                                                                                rf.popularslot, retention))
 
 allmerged[is.na(allmerged)] <- 0
@@ -295,6 +322,39 @@ allmerged.factored$GOLD.RANGES <- factor(allmerged.factored$GOLD.RANGES, levels 
 
 ```{r Graph function}
 # Graph for 0/1 and A/B
+# AB distribution
+graph.function.AB <- function(predictor){
+best <- allmerged.factored[, .N, by = c("GROUPBY", predictor)]
+best[, PERCENT := paste0(100*round(N/sum(N),2), "%"), by = c("GROUPBY")]
+  
+  ggplot(best, aes_string(predictor, "N", fill = predictor, label = "PERCENT")) +
+    geom_bar(stat = 'identity', position = "dodge", color = "black") +
+    scale_fill_few() +
+    theme_gdocs() + 
+    theme(legend.position = "none") +
+    xlab("") +
+    ylab("") +
+    geom_text(size = 3, vjust = 1.2, fontface = "bold") +
+    #facet_grid(paste0(feature, "~", "GROUPBY"), scales = 'free')
+    facet_grid(paste0("GROUPBY", "~", predictor), scales = 'free', space = 'free')
+}
+
+graph.function.AB.ONE <- function(predictor){
+best <- allmerged.factored[, .N, by = c(predictor)]
+best[, PERCENT := paste0(100*round(N/sum(N),2), "%")]
+  
+  ggplot(best, aes_string(predictor, "N", fill = predictor, label = "PERCENT")) +
+    geom_bar(stat = 'identity', position = "dodge", color = "black") +
+    scale_fill_few() +
+    theme_gdocs() + 
+    theme(legend.position = "none") +
+    xlab("") +
+    ylab("") +
+    geom_text(size = 3, vjust = 1.2, fontface = "bold")
+    #facet_grid(paste0(feature, "~", "GROUPBY"), scales = 'free')
+}
+
+
 graph.function.AB.retention <- function(predictor, feature){
 test <- allmerged.factored[, .N, by = c("GROUPBY", predictor, feature)]
 test[, TOTAL := 100*round(N/sum(N),2), by = c(feature, "GROUPBY")]
@@ -312,22 +372,22 @@ test[, PERCENT := paste0(TOTAL, "%")]
     facet_grid(paste0("GROUPBY", "~", feature), scales = 'free', space = 'free')
 }
 
-# AB distribution
-graph.function.AB <- function(predictor){
-best <- allmerged.factored[, .N, by = c("GROUPBY", predictor)]
-best[, PERCENT := paste0(100*round(N/sum(N),2), "%"), by = c("GROUPBY")]
+graph.function.AB.retention.ONE <- function(predictor, feature){
+test <- allmerged.factored[, .N, by = c(predictor, feature)]
+test[, TOTAL := 100*round(N/sum(N),2), by = c(feature)]
+test[, PERCENT := paste0(TOTAL, "%")]
   
-  ggplot(best, aes_string(predictor, "N", fill = predictor, label = "PERCENT")) +
+  ggplot(test, aes_string(predictor, "TOTAL", fill = predictor, label = "PERCENT")) +
     geom_bar(stat = 'identity', position = "dodge", color = "black") +
     scale_fill_few() +
-    theme_gdocs() + 
+    theme_gdocs() +  
     theme(legend.position = "none") +
     xlab("") +
     ylab("") +
     geom_text(size = 3, vjust = 1.2, fontface = "bold") +
-    #facet_grid(paste0(feature, "~", "GROUPBY"), scales = 'free')
-    facet_grid(paste0("GROUPBY", "~", predictor), scales = 'free', space = 'free')
+    facet_wrap(feature, scales = 'free')
 }
+
 
 
 # Graph for FEATURES = YES and A/B
@@ -349,6 +409,40 @@ rest <- rest[get(feature) == 1]
     facet_wrap(~GROUPBY, scales = 'free')
 }
 
+# Graph for median ranges (spins, levels)
+graph.function.median <- function(dat){
+  dat.median.one <- dat[, MEDIAN := as.integer(median(N)), by = GROUPBY]
+  dat.median.one <- unique(dat.median.one, by = "GROUPBY")
+  
+ggplot(dat, aes(GROUPBY, N, fill = GROUPBY)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = .3, height = .2, alpha = .4) +
+  theme_gdocs() +
+  xlab("") +
+  ylab("") +
+  scale_fill_few() +
+  scale_y_continuous(labels = comma) +
+  geom_text(data = dat.median.one, aes(GROUPBY, MEDIAN, label = MEDIAN, hjust = 5, size = 3.5)) +
+  theme(legend.position = "none")     
+}
+
+#Graph for median ranges (spins, levels)
+graph.function.median.ONE <- function(dat){
+  dat.median.one <- dat[, MEDIAN := median(N)]
+  dat.median.one <- unique(dat.median.one, by = "MEDIAN")
+
+
+ggplot(dat, aes(x = "Feature", y = N, fill = "Feature")) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = .3, height = .2, alpha = .4) +
+  theme_gdocs() +
+  xlab("") +
+  ylab("") +
+  scale_fill_few() +
+  geom_text(data = dat.median.one, aes("Feature", N, label = MEDIAN), size = 3.5, hjust = 10) +
+  scale_y_continuous(labels = comma) +
+  theme(legend.position = "none")
+}
 
 ```
 
@@ -379,30 +473,57 @@ ggplot(retention.graph, aes(GROUP, `1`, fill = GROUP, label = PERCENT)) +
 #### **스핀 범위**
 
 ```{r data checks}
-graph.function.AB("SPIN.RANGES")
-graph.function.AB.retention("`1`", "SPIN.RANGES")
+#graph.function.AB.ONE
+#graph.function.AB.retention("`1`", "SPIN.RANGES")
+#graph.function.AB("SPIN.RANGES")
+#graph.function.median(rf.spins.median)
+
+graph.function.AB.ONE("SPIN.RANGES")
+graph.function.AB.retention.ONE("`1`", "SPIN.RANGES")
+graph.function.median.ONE(rf.spins.median)
+
+
 ```
 
 #### **LEVEL RANGES**
 #### **레벨 범위**
 ```{r}
-graph.function.AB("LEVEL.RANGES")
-graph.function.AB.retention("`1`", "LEVEL.RANGES")
+#graph.function.AB("LEVEL.RANGES")
+#graph.function.AB.retention("`1`", "LEVEL.RANGES")
+#graph.function.median(rf.levelranges.median)
+
+graph.function.AB.ONE("LEVEL.RANGES")
+graph.function.AB.retention.ONE("`1`", "LEVEL.RANGES")
+graph.function.median.ONE(rf.levelranges.median)
+
+
 ```
 
 #### **GOLD RANGES**
 #### **골드 범위**
-```{r}
-graph.function.AB("SPIN.RANGES")
-graph.function.AB.retention("`1`", "GOLD.RANGES")
+```{r, warning=FALSE}
+#graph.function.AB("GOLD.RANGES")
+#graph.function.AB.retention("`1`", "GOLD.RANGES")
+#####graph.function.median(rf.gold.median)
+
+graph.function.AB.ONE("GOLD.RANGES")
+graph.function.AB.retention.ONE("`1`", "GOLD.RANGES")
+graph.function.median.ONE(rf.gold.median)
+
+
 ```
 
 
 #### **COLLECT RANGES**
 #### **COLLECT 범위**
 ```{r}
-graph.function.AB("COLLECT.RANGES")
-graph.function.AB.retention("`1`", "COLLECT.RANGES")
+#graph.function.AB("COLLECT.RANGES")
+#graph.function.AB.retention("`1`", "COLLECT.RANGES")
+####graph.function.median(rf.collecthourly.median)
+
+graph.function.AB.ONE("COLLECT.RANGES")
+graph.function.AB.retention.ONE("`1`", "COLLECT.RANGES")
+graph.function.median.ONE(rf.collecthourly.median)
 ```
 
 
@@ -412,74 +533,132 @@ graph.function.AB.retention("`1`", "COLLECT.RANGES")
 #### **FIRST SLOT**
 #### **첫 슬롯 입장**
 ```{r}
-graph.function.AB("FIRSTSLOT")
-graph.function.AB.retention("`1`", "FIRSTSLOT")
+#graph.function.AB("FIRSTSLOT")
+#graph.function.AB.retention("`1`", "FIRSTSLOT")
+graph.function.AB.ONE("FIRSTSLOT")
+graph.function.AB.retention.ONE("`1`", "FIRSTSLOT")
 ```
 
-#### **MOST PLAYED SLOT BY SPIN COUNT**
-#### **스핀 횟수 분포**
-```{r}
-graph.function.AB("MOSTPLAYEDSLOT")
-```
 
 #### **MOST POPULAR SLOT**
-#### **인기 슬롯 (각 유저가 가장 많이하느 슬롯 합계) **
+#### **인그 슬롯**
 ```{r}
-graph.function.AB("MOSTPOPULAR")
-graph.function.AB.retention("`1`", "MOSTPOPULAR")
+#graph.function.AB("MOSTPOPULAR")
+#graph.function.AB.retention("`1`", "MOSTPOPULAR")
+graph.function.AB.ONE("MOSTPOPULAR")
+graph.function.AB.retention.ONE("`1`", "MOSTPOPULAR")
 ```
 
 
 #### **SLOTS ENTERED**
 #### **슬롯 입장 개수**
 ```{r}
-graph.function.AB("SLOTS_ENTERED")
-graph.function.AB.retention("`1`", "SLOTS_ENTERED")
+#graph.function.AB("SLOTS_ENTERED")
+#graph.function.AB.retention("`1`", "SLOTS_ENTERED")
+graph.function.AB.ONE("SLOTS_ENTERED")
+graph.function.AB.retention.ONE("`1`", "SLOTS_ENTERED")
 ```
 
 > ### **Features**
 ***
 
 #### **NEW PLAYER BONUS**
-#### **신규 유저 보너스**
+#### **신규 유저 보너스 획득**
 ```{r}
-#graph.function.AB.retention("`1`", "NEWPLAYERBONUS")
-graph.function.AB("NEWPLAYERBONUS")
-graph.function.1.returns("`1`", "NEWPLAYERBONUS")
+#graph.function.AB("NEWPLAYERBONUS")
+#graph.function.1.returns("`1`", "NEWPLAYERBONUS")
+graph.function.AB.ONE("NEWPLAYERBONUS")
+graph.function.AB.retention.ONE("`1`", "NEWPLAYERBONUS")
 
 ```
 
 #### **CHEERUP**
 ```{r}
-graph.function.AB("CHEERUP")
-graph.function.1.returns("`1`", "CHEERUP")
+#graph.function.AB("CHEERUP")
+#graph.function.1.returns("`1`", "CHEERUP")
+#graph.function.usage.content.AB("CHEERUP")
+
+graph.function.AB.ONE("CHEERUP")
+graph.function.AB.retention.ONE("`1`", "CHEERUP")
+graph.function.usage.content.AB.ONE("CHEERUP")
+
+
 ```
 
 #### **DOUBLEUP**
 ```{r}
-graph.function.AB("DOUBLEUP")
-graph.function.1.returns("`1`", "DOUBLEUP")
-graph.function.usage("DOUBLEUP")
+#graph.function.AB("DOUBLEUP")
+#graph.function.1.returns("`1`", "DOUBLEUP")
+
+# graph.function.usage.subcontent.AB <- function(feature){
+# fest <- vegas[SUBCONTENT == feature][, .(GROUPBY, UID, SUBCONTENT)]
+# fest <- fest[, .N, by = .(GROUPBY, UID)]
+# 
+# ggplot(fest, aes(GROUPBY, N, fill = GROUPBY)) +
+#   geom_boxplot() +
+#   geom_jitter(width = .3, height = .2) +
+#   theme_gdocs() +
+#   xlab("") +
+#   ylab("") +
+# scale_fill_few() +
+#   theme(legend.position = "none")
+# }
+# 
+# graph.function.usage.subcontent.AB("DOUBLEUP")
+
+graph.function.AB.ONE("DOUBLEUP")
+graph.function.AB.retention.ONE("`1`", "DOUBLEUP")
+
+
+graph.function.usage.subcontent.AB.ONE <- function(feature){
+fest <- vegas[SUBCONTENT == feature][, .(UID, SUBCONTENT)]
+fest <- fest[, .N, by = .(UID)]
+
+ggplot(fest, aes("FEATURE", N, fill = "FEATURE")) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = .3, height = .2) +
+  theme_gdocs() +
+  xlab("") +
+  ylab("") +
+  scale_fill_few() +
+  theme(legend.position = "none")
+}
+
+graph.function.usage.subcontent.AB.ONE("DOUBLEUP")
+
 ```
 
 #### **FACEBOOK SHARE**
 ```{r}
-#graph.function.AB.retention("`1`", "SHARE")
-graph.function.AB("SHARE")
-graph.function.1.returns("`1`", "SHARE")
-graph.function.usage("SHARE")
+#graph.function.AB("SHARE")
+#graph.function.1.returns("`1`", "SHARE")
+#graph.function.usage.content.AB("SHARE")
+
+graph.function.AB.ONE("SHARE")
+graph.function.AB.retention.ONE("`1`", "SHARE")
+graph.function.usage.content.AB.ONE("SHARE")
+
 ```
 
 > ### **ABANDONMENT**
 *** 
 
 #### **LEVEL**
-#### **`1`일에 접속하지 않은 유저 x 레벨**
+#### **`1`날 접속하지 않은 유저의 레벨**
 ```{r}
 abandoned.level <- allmerged[`1` == 0, .(UID, GROUPBY, LEVEL)]
 abandoned.level <- unique(abandoned.level, by = "UID")
 
-ggplot(abandoned.level, aes(GROUPBY, LEVEL, fill = GROUPBY)) +
+# ggplot(abandoned.level, aes(GROUPBY, LEVEL, fill = GROUPBY)) +
+#   geom_boxplot() +
+#   geom_jitter(width = .3, height = .2) +
+#   theme_gdocs() +
+#   xlab("") +
+#   ylab("") +
+#   scale_fill_few() +
+#   theme(legend.position = "none")
+
+ggplot(abandoned.level, aes("LEVEL", LEVEL, fill = "LEVEL")) +
   geom_boxplot() +
   geom_jitter(width = .3, height = .2) +
   theme_gdocs() +
@@ -488,18 +667,26 @@ ggplot(abandoned.level, aes(GROUPBY, LEVEL, fill = GROUPBY)) +
   scale_fill_few() +
   theme(legend.position = "none")
 
-abandoned.level.summary <- abandoned.level[, .N, by = .(GROUPBY, LEVEL)]
 
-ggplot(abandoned.level.summary, aes(LEVEL, N, fill = GROUPBY)) +
+```
+
+#### **LAST SLOT**
+#### **`1`날 접속하지 않은 유저의 마지막 슬롯**
+```{r}
+abandoned.lastslot <- allmerged[`1` == 0, .(UID, LASTSLOT)]
+abandoned.lastslot <- abandoned.lastslot[, .N, by = .(LASTSLOT)]
+invisible(abandoned.lastslot[, PERCENT := paste0(100*round(N/sum(N),2), "%")])
+
+ggplot(abandoned.lastslot, aes(LASTSLOT, N, fill = LASTSLOT, label = PERCENT)) +
   geom_bar(stat = "identity", color = "black") +
   theme_gdocs() +
   xlab("") +
   ylab("") +
   scale_fill_few() +
-  theme(legend.position = "none") +
-  facet_wrap(~GROUPBY)
-
-  
+  geom_text(size = 3.5, vjust = 1.2, fontface = "bold") +
+  theme(legend.position = "none")
 ```
+
+
 
  
