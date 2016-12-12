@@ -7,7 +7,8 @@ output: html_document
 
 ```{r, echo = FALSE}
 ## Filtering date
-date  <- "2016-12-05 14:00"
+date  <- "2016-12-05"
+user_id <- 10000
 ```
 
 ***
@@ -17,6 +18,8 @@ knitr::opts_chunk$set(echo = FALSE)
 ```
 
 ```{r, echo = FALSE, message = FALSE, warning = FALSE}
+## Loading
+
 library(ggplot2)
 library(ggthemes)
 library(scales)
@@ -28,226 +31,302 @@ library(tidyr)
 library(gridExtra)
 library(plotly)
 
-#Loading
-
-# Create directory
+## Create system time
 sysdate <- format(Sys.Date(), "%Y%m%d")
-querydirectory <- file.path("C:/Users/antpc/Desktop/Vegas/Analytics/Query", sysdate)
 
-# Load files
-all <- list.files(querydirectory, full.names = TRUE)
-all <- rbindlist(lapply(all, read_csv))
+## Load directory
+load_vegas_logs <- file.path("C:/Users/antpc/Desktop/Vegas/Analytics/Query", sysdate, "Vegas_Logs")
+load_slot_logs <- file.path("C:/Users/antpc/Desktop/Vegas/Analytics/Query", sysdate, "Slot_Logs")
 
+
+## Load files
+
+# Vegas logs
+
+vegas_logs_list <- list.files(load_vegas_logs, full.names = TRUE)
+vegas_logs <- rbindlist(lapply(vegas_logs_list, read_csv))
+
+# Slot logs
+
+slot_logs_list <- list.files(load_slot_logs, full.names = TRUE)
+slot_logs <- rbindlist(lapply(slot_logs_list, read_csv))
+
+```
+
+```{r}
+# General filter
+slot_logs <- slot_logs[SUBCONTENT == "SPIN" & CREATE_DATE >= date]
 ```
 
 
 ```{r, echo = FALSE, message = FALSE, warning = FALSE}
+#### Slot details --------------------------------
 
-## First slot
-first.slot <- all[APP == "VEGAS" & CREATE_ACCOUNT >= date & UID > 6000 & COUNTRY != "KR"][order(UID, CREATE_DATE)] ##### Filter for marketing dates #####
-first.slot <- first.slot[SUBCONTENT == "SPIN", .SD[1], by = UID][, .(UID, ID)]
-first.slot <- first.slot[, .N, by = ID]
+## First slot ----------------
 
-first.slot.graph <- ggplot(first.slot, aes(ID, N, fill = ID, label = round(N/sum(N),2))) +
-  geom_bar(stat = "identity") +
-  scale_fill_few() +
-  theme(legend.position = "none") +
-  geom_text(size = 3.5) +
-  xlab("") +
-  ylab("") +
-  labs(
-    subtitle = "New users"
-  )
-
-## Spin count
-
-#existing accs
-test.exist <- all[APP == "VEGAS" & CREATE_DATE >= date & CREATE_ACCOUNT < date & COUNTRY != "KR"][order(UID, CREATE_DATE)] ##### Filter for marketing dates #####
-test.exist <- test.exist[SUBCONTENT == "SPIN", .N, by = ID]
-
-spins.exist <- ggplot(test.exist, aes(ID, N, fill = ID, label = round(N/sum(N),2))) +
-  geom_bar(stat = "identity") +
-  scale_fill_few() +
-  theme(legend.position = "none") +
-  geom_text(size = 3.5) +
-  xlab("") +
-  ylab("") +
-  labs(
-   subtitle = "Existing users"
-  )
-
-#new accounts
-test.new <- all[APP == "VEGAS" & CREATE_ACCOUNT >= date & COUNTRY != "KR"][order(UID, CREATE_DATE)] ##### Filter for marketing dates #####
-test.new <- test.new[SUBCONTENT == "SPIN", .N, by = ID]
-
-spins.new <- ggplot(test.new, aes(ID, N, fill = ID, label = round(N/sum(N),2))) +
-  geom_bar(stat = "identity") +
-  scale_fill_few() +
-  theme(legend.position = "none") +
-  geom_text(size = 3.5) +
-  xlab("") +
-  ylab("") +
-  labs(
-    subtitle = "New users"
-  )
-
-
-
-## Popularity count
-# New users
-popular.exist <- all[APP == "VEGAS" & CREATE_DATE >= date & CREATE_ACCOUNT < date & COUNTRY != "KR"][order(UID, CREATE_DATE)] ##### Filter for marketing dates #####
-popular.exist <- popular.exist[SUBCONTENT == "SPIN", .N, by = .(UID, ID)][order(UID, -N)]
-popular.exist <- popular.exist[, lapply(.SD, max), UID]
-popular.exist <- popular.exist[, .N, by = ID]
-
-pop.exist <- ggplot(popular.exist, aes(ID, N, fill = ID, label = round(N/sum(N),2))) +
-  geom_bar(stat = "identity") +
-  scale_fill_few() +
-  theme(legend.position = "none") +
-  geom_text(size = 3.5) +
-  xlab("") +
-  ylab("") +
-  labs(
-   subtitle = "Existing users"
-  )
-
-
-# New users
-popular.new <- all[APP == "VEGAS" & CREATE_ACCOUNT >= date & COUNTRY != "KR"][order(UID, CREATE_DATE)] ##### Filter for marketing dates #####
-popular.new <- popular.new[SUBCONTENT == "SPIN", .N, by = .(UID, ID)][order(UID, -N)]
-popular.new <- popular.new[, lapply(.SD, max), UID]
-popular.new <- popular.new[, .N, by = ID]
-
-pop.new <- ggplot(popular.new, aes(ID, N, fill = ID, label = round(N/sum(N),2))) +
-  geom_bar(stat = "identity") +
-  scale_fill_few() +
-  theme(legend.position = "none") +
-  geom_text(size = 3.5) +
-  xlab("") +
-  ylab("") +
-  labs(
-    subtitle = "New users"
-  )
-
-
-## Average spins time
+# first_slot <- slot_logs[]
 # 
-avgspins.exist <- all[APP == "VEGAS" & CREATE_DATE >= date & COUNTRY != "KR" & SUBCONTENT == "SPIN"][order(UID, CREATE_DATE)] ##### Filter for marketing dates #####
-avgspins.exist <- avgspins.exist[, .N, by = .(UID, ID)]
+# vegas_logs
+# first.slot <- all[APP == "VEGAS" & CREATE_ACCOUNT >= date & UID > 6000 & COUNTRY != "KR"][order(UID, CREATE_DATE)] ##### Filter for marketing dates 
+# first.slot <- first.slot[SUBCONTENT == "SPIN", .SD[1], by = UID][, .(UID, ID)]
+# first.slot <- first.slot[, .N, by = ID]
+# 
+# first.slot.graph <- ggplot(first.slot, aes(ID, N, fill = ID, label = round(N/sum(N),2))) +
+#   geom_bar(stat = "identity") +
+#   scale_fill_few() +
+#   theme(legend.position = "none") +
+#   geom_text(size = 3.5) +
+#   xlab("") +
+#   ylab("") +
+#   labs(
+#     subtitle = "New users"
+#   )
+```
 
-avgspins.exist.graph <- ggplot(avgspins.exist, aes(ID, N, fill = ID, label = round(N/sum(N),2))) +
-  geom_boxplot() +
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+## Spin count ----------------
+
+# New accounts
+
+new_spins <- slot_logs[CREATE_ACCOUNT >= date & UID > user_id]
+new_spins <- new_spins[, .N, ID]
+
+
+new_spins_graph <- ggplot(new_spins, aes(ID, N, fill = ID, label = round(N/sum(N),2))) +
+  geom_bar(stat = "identity") +
   scale_fill_few() +
   theme(legend.position = "none") +
-  ylim(0, quantile(avgspins.exist$N, .95)) +
+  geom_text(size = 3.5) +
   xlab("") +
   ylab("") +
   labs(
-   title = "Existing users"
+    subtitle = "New users"
   )
 
-## Average spin time with popular
-avgspinpop.exist <- all[APP == "VEGAS" & CREATE_DATE >= date & COUNTRY != "KR"][order(UID, CREATE_DATE)] ##### Filter for marketing dates #####
-avgspinpop.exist <- avgspinpop.exist[SUBCONTENT == "SPIN", .N, by = .(UID, ID)][order(UID, -N)]
-avgspinpop.exist <- avgspinpop.exist[, lapply(.SD, max), UID]
+# Existing accs
 
-avgspinspop.exist.graph <- ggplot(avgspinpop.exist, aes(ID, N, fill = ID, label = round(N/sum(N),2))) +
-  geom_boxplot() +
+existing_spins <- slot_logs[CREATE_ACCOUNT < date]
+existing_spins <- existing_spins[, .N, ID]
+
+existing_spins_graph <- ggplot(existing_spins, aes(ID, N, fill = ID, label = round(N/sum(N),2))) +
+  geom_bar(stat = "identity") +
   scale_fill_few() +
   theme(legend.position = "none") +
-  ylim(0, quantile(avgspins.exist$N, .95)) +
+  geom_text(size = 3.5) +
   xlab("") +
   ylab("") +
+  labs(
+    subtitle = "Existing users"
+  )
+```
+
+```{r}
+## Average spins ----------------
+
+# New users
+
+new_avgspins <- slot_logs[CREATE_ACCOUNT >= date & UID > user_id]
+new_avgspins <- new_avgspins[, lapply(.SD, sum), .(UID, ID), .SDcols = c("SUM_CNT")]
+
+new_avgspins_graph <- ggplot(new_avgspins, aes(ID, SUM_CNT, fill = ID)) +
+  geom_boxplot() +
+  ylim(0, quantile(new_avgspins$SUM_CNT, .95)) +
+  scale_fill_few() +
+  xlab("") +
+  ylab("") +
+  theme(legend.position = "none") +
+  labs(
+    title = "New users"
+  )
+
+
+# Test for existing users
+#slot_logs[CREATE_ACCOUNT < date]
+
+# Existing users
+existing_avgspins <- slot_logs[CREATE_ACCOUNT < date]
+existing_avgspins <- existing_avgspins[, lapply(.SD, sum), .(UID, ID), .SDcols = c("SUM_CNT")]
+
+
+existing_avgspins_graph <- ggplot(existing_avgspins, aes(ID, SUM_CNT, fill = ID)) +
+  geom_boxplot() +
+  ylim(0, quantile(new_avgspins$SUM_CNT, .95)) +
+  scale_fill_few() +
+  xlab("") +
+  ylab("") +
+  theme(legend.position = "none") +
   labs(
     title = "Existing users"
   )
 
-```
-
-```{r, echo = FALSE, message = FALSE, warning = FALSE}
-# First slot enter information
-
-## First slot spin boxplot
-
-firstslot <- all[APP == "VEGAS" & CREATE_ACCOUNT >= "2016-12-05 14:00" & UID > 6240 & COUNTRY != "KR"][order(UID, CREATE_DATE)]
-filtered <- firstslot[SUBCONTENT == "SPIN", .SD[1], by = UID][, .(UID, ID)]
-setnames(filtered, "ID", "FIRSTSLOT")
-
-firstslot <- firstslot[,.(UID, CREATE_DATE, CONTENT, SUBCONTENT, ID)]
-
-merged <- merge(firstslot, filtered, by = "UID", all.x = TRUE)
-merged <- merged[SUBCONTENT == "SPIN"]
-
-merged <- merged[ID == FIRSTSLOT]
-invisible(merged[, DIFF := as.numeric(difftime(CREATE_DATE, shift(CREATE_DATE), units = "mins")), by = UID])
-merged <- merged[DIFF < 1]
-
-timed <- merged
-merged <- merged[, .N, by = .(UID, ID)]
-
-firstslot <- ggplot(merged, aes(ID, N, fill = ID)) +
-  geom_boxplot() +
-  ylim(0, quantile(merged$N, .95)) +
-  scale_fill_few() +
-  theme(legend.position = "none") +
-  xlab("") +
-  ylab("") +
-  labs(
-    title = "Spins"
-  )
-
-###
-#time
-
-timed <- timed[, .SD[c(1, .N)], UID]
-invisible(timed[, DIFF := as.numeric(difftime(CREATE_DATE, shift(CREATE_DATE), units = "mins")), by = UID])
-timed <- na.omit(timed)
-invisible(timed[, DIFF := round(DIFF)])
-timed <- timed[DIFF < 60]
-
-firstslot.time <- ggplot(timed, aes(ID, DIFF, fill = ID)) +
-  geom_boxplot() +
-  scale_fill_few() +
-  theme(legend.position = "none") +
-  xlab("") +
-  ylab("") +
-  labs(
-    title = "Minutes"
-  )
 
 ```
 
 
-### 첫 슬롯 입장 
+
 ```{r, echo = FALSE, message = FALSE, warning = FALSE}
+## Popularity count ----------------
+
+# New users
+
+new_popular <- slot_logs[CREATE_ACCOUNT >= date & UID > user_id]
+new_popular_sum <- new_popular[, lapply(.SD, sum), .(UID,ID), .SDcols = "SUM_CNT"][order(UID, -SUM_CNT)]
+new_popular_max <- new_popular_sum[, .SD[1], UID]
+new_popular_count <- new_popular_max[, .N, ID ]
+
+new_pop_graph <- ggplot(new_popular_count, aes(ID, N, fill = ID, label = round(N/sum(N),2))) +
+  geom_bar(stat = "identity") +
+  scale_fill_few() +
+  theme(legend.position = "none") +
+  geom_text(size = 3.5) +
+  xlab("") +
+  ylab("") +
+  labs(
+   subtitle = "New users"
+  )
+
+
+# Existing users
+
+existing_popular <- slot_logs[CREATE_ACCOUNT < date]
+existing_popular_sum <- existing_popular[, lapply(.SD, sum), .(UID,ID), .SDcols = "SUM_CNT"][order(UID, -SUM_CNT)]
+existing_popular_max <- existing_popular_sum[, .SD[1], UID]
+existing_popular_count <- existing_popular_max[, .N, ID ]
+
+existing_pop_graph <- ggplot(existing_popular_count, aes(ID, N, fill = ID, label = round(N/sum(N),2))) +
+  geom_bar(stat = "identity") +
+  scale_fill_few() +
+  theme(legend.position = "none") +
+  geom_text(size = 3.5) +
+  xlab("") +
+  ylab("") +
+  labs(
+    subtitle = "Existing users"
+  )
+```
+
+```{r}
+## Average spins ----------------
+
+# New users
+
+new_pop_avgspins <- slot_logs[CREATE_ACCOUNT >= date & UID > user_id]
+new_pop_avgspins <- new_pop_avgspins[, lapply(.SD, sum), .(UID,ID), .SDcols = "SUM_CNT"][order(UID, -SUM_CNT)]
+new_pop_avespins_max <- new_pop_avgspins[, .SD[1], UID]
+ 
+new_pop_avespins_max_graph <- ggplot(new_pop_avespins_max, aes(ID, SUM_CNT, fill = ID)) +
+  geom_boxplot() +
+  ylim(0, quantile(new_pop_avespins_max$SUM_CNT, .95)) +
+  scale_fill_few() +
+  xlab("") +
+  ylab("") +
+  theme(legend.position = "none") +
+  labs(
+    title = "New users"
+  )
+
+# Existing users
+
+existing_pop_avgspins <- slot_logs[CREATE_ACCOUNT < date]
+existing_pop_avgspins <- existing_pop_avgspins[, lapply(.SD, sum), .(UID,ID), .SDcols = "SUM_CNT"][order(UID, -SUM_CNT)]
+existing_pop_avespins_max <- existing_pop_avgspins[, .SD[1], UID]
+ 
+existing_pop_avespins_max_graph <- ggplot(existing_pop_avespins_max, aes(ID, SUM_CNT, fill = ID)) +
+  geom_boxplot() +
+  ylim(0, quantile(existing_pop_avespins_max$SUM_CNT, .95)) +
+  scale_fill_few() +
+  xlab("") +
+  ylab("") +
+  theme(legend.position = "none") +
+  labs(
+    title = "Existing users"
+  )
+```
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+# # First slot enter information
+# 
+# ## First slot spin boxplot
+# 
+# firstslot <- all[APP == "VEGAS" & CREATE_ACCOUNT >= "2016-12-05 14:00" & UID > 6240 & COUNTRY != "KR"][order(UID, CREATE_DATE)]
+# filtered <- firstslot[SUBCONTENT == "SPIN", .SD[1], by = UID][, .(UID, ID)]
+# setnames(filtered, "ID", "FIRSTSLOT")
+# 
+# firstslot <- firstslot[,.(UID, CREATE_DATE, CONTENT, SUBCONTENT, ID)]
+# 
+# merged <- merge(firstslot, filtered, by = "UID", all.x = TRUE)
+# merged <- merged[SUBCONTENT == "SPIN"]
+# 
+# merged <- merged[ID == FIRSTSLOT]
+# invisible(merged[, DIFF := as.numeric(difftime(CREATE_DATE, shift(CREATE_DATE), units = "mins")), by = UID])
+# merged <- merged[DIFF < 1]
+# 
+# timed <- merged
+# merged <- merged[, .N, by = .(UID, ID)]
+# 
+# firstslot <- ggplot(merged, aes(ID, N, fill = ID)) +
+#   geom_boxplot() +
+#   ylim(0, quantile(merged$N, .95)) +
+#   scale_fill_few() +
+#   theme(legend.position = "none") +
+#   xlab("") +
+#   ylab("") +
+#   labs(
+#     title = "Spins"
+#   )
+# 
+# ###
+# #time
+# 
+# timed <- timed[, .SD[c(1, .N)], UID]
+# invisible(timed[, DIFF := as.numeric(difftime(CREATE_DATE, shift(CREATE_DATE), units = "mins")), by = UID])
+# timed <- na.omit(timed)
+# invisible(timed[, DIFF := round(DIFF)])
+# timed <- timed[DIFF < 60]
+# 
+# firstslot.time <- ggplot(timed, aes(ID, DIFF, fill = ID)) +
+#   geom_boxplot() +
+#   scale_fill_few() +
+#   theme(legend.position = "none") +
+#   xlab("") +
+#   ylab("") +
+#   labs(
+#     title = "Minutes"
+#   )
+
+```
+
+
+```{r, eval = FALSE, echo = FALSE, message = FALSE, warning = FALSE}
 #
 first.slot.graph
 ```
 
-### 첫 슬롯 입장 상세 정보  (신규 유저)
-```{r, echo = FALSE, message = FALSE, warning = FALSE}
+```{r, eval = FALSE, echo = FALSE, message = FALSE, warning = FALSE}
 ggplotly(firstslot)
 ggplotly(firstslot.time)
 ```
 
 ### 스핀 횟수  
 ```{r, echo = FALSE, message = FALSE, warning = FALSE}
-grid.arrange(spins.new, spins.exist, nrow = 1)
+grid.arrange(new_spins_graph, existing_spins_graph, nrow = 1)
 ```
 
 ### 스핀 기반 슬롯 정보
 ```{r, echo = FALSE, message = FALSE, warning = FALSE}
-ggplotly(avgspins.exist.graph)
+ggplotly(new_avgspins_graph)
+ggplotly(existing_avgspins_graph)
 ```
 
 ### 슬롯 인기 
 ```{r, echo = FALSE, message = FALSE, warning = FALSE}
-grid.arrange(pop.new, pop.exist, nrow = 1)
+grid.arrange(new_pop_graph, existing_pop_graph, nrow = 1)
 ```
 
 ### 인기 기반 스핀 정보  
 ```{r, echo = FALSE, message = FALSE, warning = FALSE}
-ggplotly(avgspinspop.exist.graph)
+ggplotly(new_pop_avespins_max_graph)
+ggplotly(existing_pop_avespins_max_graph)
 ```
 
 
