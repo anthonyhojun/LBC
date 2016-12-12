@@ -1,0 +1,109 @@
+---
+title: "Retention"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+## Loading
+
+library(ggplot2)
+library(ggthemes)
+library(scales)
+library(readr)
+library(stringr)
+library(data.table)
+library(Hmisc)
+library(tidyr)
+library(gridExtra)
+library(plotly)
+
+## Create system time
+sysdate <- format(Sys.Date(), "%Y%m%d")
+
+## Load directory
+load_vegas_logs <- file.path("C:/Users/antpc/Desktop/Vegas/Analytics/Query", sysdate, "Vegas_Logs")
+load_slot_logs <- file.path("C:/Users/antpc/Desktop/Vegas/Analytics/Query", sysdate, "Slot_Logs")
+
+
+## Load files
+
+# Vegas logs
+
+vegas_logs_list <- list.files(load_vegas_logs, full.names = TRUE)
+vegas_logs <- rbindlist(lapply(vegas_logs_list, read_csv))
+
+# Slot logs
+
+slot_logs_list <- list.files(load_slot_logs, full.names = TRUE)
+slot_logs <- rbindlist(lapply(slot_logs_list, read_csv))
+
+```
+
+
+
+```{r, message = FALSE, warning = FALSE, echo = FALSE}
+date  <- "2016-12-05"
+
+## First slot
+retention <- vegas_logs[CREATE_ACCOUNT >= date & UID > 6000] 
+retention <- retention[,.(UID, CREATE_ACCOUNT, CREATE_DATE)]
+
+# HRS
+invisible(rekt.hours <- retention[, DIFFERENCE.HOURS := as.numeric(difftime(CREATE_DATE,  CREATE_ACCOUNT, units = "hours")), by = UID])
+
+
+#rekt hours
+invisible(rekt.hours[, DIFFERENCE.HOURS := floor(DIFFERENCE.HOURS)])
+rekt.hours <- rekt.hours[DIFFERENCE.HOURS >= 0 & DIFFERENCE.HOURS <= 10]
+rekt.hours <- unique(rekt.hours, by = c("UID", "DIFFERENCE.HOURS"))
+
+rekt.hour.cast <- dcast(rekt.hours, UID ~ DIFFERENCE.HOURS, function(x) 1, fill = 0)
+rekt.hour.cast.summary <- rekt.hour.cast[, lapply(.SD, function(x) round(sum(x) / length(x), 2)), .SDcols = c(3:10)]
+rekt.hour.cast.melt <- melt(rekt.hour.cast.summary)
+
+hr.graph <- ggplot(rekt.hour.cast.melt, aes(variable, value, label = value)) +
+  geom_bar(stat = "identity", fill = "light blue") +
+  theme(legend.position = "none") +
+  theme_calc() +
+  geom_text(size = 3.2) +
+  xlab("hours") +
+  ylab("")
+
+# MINS
+invisible(rekt.mins <- retention[, DIFFERENCE.MINS := as.numeric(difftime(CREATE_DATE, CREATE_ACCOUNT, units = "mins")), by = UID])
+
+#rekt minutes
+rekt.mins <- rekt.mins[DIFFERENCE.MINS >= 0 & DIFFERENCE.MINS <= 90]
+invisible(rekt.mins[, DIFFERENCE.MINS := DIFFERENCE.MINS/10])
+invisible(rekt.mins[, DIFFERENCE.MINS := floor(DIFFERENCE.MINS)])
+invisible(rekt.mins[, DIFFERENCE.MINS := 10 * DIFFERENCE.MINS])
+
+rekt.min.cast <- dcast(rekt.mins, UID ~ DIFFERENCE.MINS, function(x) 1, fill = 0)
+rekt.min.cast.summary <- rekt.min.cast[, lapply(.SD, function(x) round(sum(x) / length(x), 2)), .SDcols = c(3:8)]
+rekt.min.cast.melt <- melt(rekt.min.cast.summary)
+
+min.graph <- ggplot(rekt.min.cast.melt, aes(variable, value, label = value)) +
+  geom_bar(stat = "identity", fill = "light blue") +
+  theme(legend.position = "none") +
+  geom_text(size = 3.2) +
+  xlab("minutes") +
+  ylab("") +
+  theme_calc()
+```
+
+***
+
+### Hour retention
+```{r, message = FALSE, echo = FALSE}
+hr.graph
+```
+
+### Minutes retention
+```{r, message = FALSE, echo = FALSE}
+min.graph
+```
+
